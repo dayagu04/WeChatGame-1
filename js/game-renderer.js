@@ -8,19 +8,24 @@ import { ResourceType, BuildingState, WeatherType, WorkerState } from './game-co
 // 资源图标映射
 const RES_EMOJI = {
   [ResourceType.WOOD]: '🪵',
-  [ResourceType.COAL]: '�ite',
+  [ResourceType.COAL]: '⬛',
   [ResourceType.MEAT]: '🥩',
   [ResourceType.RATION]: '🍖',
   [ResourceType.IRON]: '⚙️',
   [ResourceType.GEM]: '💎',
 };
-// 修正煤炭图标
-RES_EMOJI[ResourceType.COAL] = '⬛';
 
 const WEATHER_EMOJI = {
   [WeatherType.CLEAR]: '☀️',
   [WeatherType.SNOW]: '🌨️',
   [WeatherType.BLIZZARD]: '🌪️',
+};
+
+const BLIZZARD_NAMES = {
+  'BLZ_IDLE': '平静',
+  'BLZ_WARNING': '预警中',
+  'BLZ_ACTIVE': '肆虐中',
+  'BLZ_RECOVERY': '消退中',
 };
 
 const STATE_NAMES = {
@@ -107,7 +112,8 @@ export class GameRenderer {
 
     ctx.font = 'bold 14px monospace';
     ctx.fillStyle = temp < -30 ? '#ff4444' : temp < -10 ? '#ffaa00' : '#44ff44';
-    ctx.fillText(`${emoji} 温度: ${temp.toFixed(1)}°C  |  暴风雪: ${w.blizzardState}  |  Tick: ${gameLoop.tickCount}`, 15, y + 20);
+    const blizName = BLIZZARD_NAMES[w.blizzardState] || w.blizzardState;
+    ctx.fillText(`${emoji} 温度: ${temp.toFixed(1)}°C  |  暴风雪: ${blizName}  |  Tick: ${gameLoop.tickCount}`, 15, y + 20);
   }
 
   // ---- 建筑网格 ----
@@ -161,7 +167,7 @@ export class GameRenderer {
       }
 
       // 升级费用
-      if (b.isUnlocked() && b.state === BuildingState.NORMAL) {
+      if (b.isUnlocked() && (b.state === BuildingState.NORMAL || b.state === BuildingState.PRODUCING)) {
         const cost = b.getUpgradeCost();
         const costType = Object.keys(cost)[0];
         const costVal = cost[costType];
@@ -225,6 +231,7 @@ export class GameRenderer {
     const btnW = (this.w - 40) / 4;
     ctx.font = 'bold 12px monospace';
 
+    ctx.save();
     for (let i = 0; i < buttons.length; i++) {
       const bx = 10 + i * (btnW + 5);
       ctx.fillStyle = 'rgba(100,149,237,0.3)';
@@ -235,7 +242,7 @@ export class GameRenderer {
       ctx.fillStyle = '#fff';
       ctx.textAlign = 'center';
       ctx.fillText(buttons[i].label, bx + btnW / 2, y + 30);
-      ctx.textAlign = 'left';
     }
+    ctx.restore();
   }
 }

@@ -3,9 +3,9 @@
 // 核心 Tick 心跳与游戏主循环
 // ==========================================
 
-import { GAME_CONSTANTS, ResourceType, eventBus, GlobalEvents } from './game-constants';
+import { GAME_CONSTANTS, ResourceType, BuildingType, BuildingState, WorkerState, eventBus, GlobalEvents } from './game-constants';
 import { WalletManager } from './game-wallet';
-import { BuildingManager, BuildingState } from './game-buildings';
+import { BuildingManager } from './game-buildings';
 import { WorkerManager } from './game-workers';
 import { WeatherManager } from './game-weather';
 
@@ -26,10 +26,12 @@ export class GameLoop {
       this.workers.addWorker();
     }
     // 默认分配1个工人到伐木场
-    const idle = this.workers.workers.find(w => w.state === 'WK_IDLE');
-    if (idle) {
-      idle.state = 'WK_WORKING';
+    const lumberCamp = this.buildings.get(BuildingType.LUMBER_CAMP);
+    const idle = this.workers.workers.find(w => w.state === WorkerState.IDLE);
+    if (idle && lumberCamp) {
+      idle.state = WorkerState.WORKING;
       idle.assignedBuilding = BuildingType.LUMBER_CAMP;
+      lumberCamp.assignedWorkers.push(idle.workerId);
     }
 
     // 监听Tick
@@ -87,7 +89,7 @@ export class GameLoop {
 
       if (b.state === BuildingState.PRODUCING || b.state === BuildingState.NORMAL) {
         const workersHere = this.workers.workers.filter(
-          w => w.assignedBuilding === b.type && w.state === 'WK_WORKING'
+          w => w.assignedBuilding === b.type && w.state === WorkerState.WORKING
         );
         if (workersHere.length > 0) {
           const output = this.getBuildingOutput(b.type, workersHere.length);
@@ -101,13 +103,13 @@ export class GameLoop {
 
   getBuildingOutput(type, workerCount) {
     switch (type) {
-      case 'BLD_LUMBER_CAMP':
+      case BuildingType.LUMBER_CAMP:
         return { type: ResourceType.WOOD, amount: 2.0 * workerCount };
-      case 'BLD_COAL_MINE':
+      case BuildingType.COAL_MINE:
         return { type: ResourceType.COAL, amount: 1.5 * workerCount };
-      case 'BLD_HUNTER_HUT':
+      case BuildingType.HUNTER_HUT:
         return { type: ResourceType.MEAT, amount: 1.0 * workerCount };
-      case 'BLD_COOKHOUSE':
+      case BuildingType.COOKHOUSE:
         // 加工：消耗生肉产出熟食
         if (this.wallet.get(ResourceType.MEAT) >= 1 * workerCount) {
           this.wallet.resources[ResourceType.MEAT] -= 1 * workerCount;

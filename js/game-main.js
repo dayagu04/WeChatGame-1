@@ -3,7 +3,9 @@
 // 游戏主控：初始化 + 渲染循环 + 输入处理
 // ==========================================
 
-import { BuildingType, BuildingState, ResourceType } from './game-constants';
+import './render';
+import { SCREEN_WIDTH, SCREEN_HEIGHT, PIXEL_RATIO } from './render';
+import { BuildingType, BuildingState, ResourceType, WorkerState } from './game-constants';
 import { GameLoop } from './game-loop';
 import { GameRenderer } from './game-renderer';
 
@@ -11,8 +13,13 @@ export default class GameMain {
   constructor() {
     // Canvas 初始化
     this.ctx = canvas.getContext('2d');
-    this.w = canvas.width;
-    this.h = canvas.height;
+    // 逻辑尺寸（CSS 像素），用于布局和触摸坐标
+    this.w = SCREEN_WIDTH;
+    this.h = SCREEN_HEIGHT;
+    // 设置 canvas 物理尺寸
+    canvas.width = SCREEN_WIDTH * PIXEL_RATIO;
+    canvas.height = SCREEN_HEIGHT * PIXEL_RATIO;
+    this.ctx.scale(PIXEL_RATIO, PIXEL_RATIO);
 
     // 核心系统
     this.game = new GameLoop();
@@ -33,6 +40,7 @@ export default class GameMain {
     wx.onTouchStart((e) => {
       const touch = e.touches[0];
       this.touchStartY = touch.clientY;
+      console.log(`[Touch] Start at (${touch.clientX}, ${touch.clientY}), canvas: ${this.w}x${this.h}`);
       this.handleTap(touch.clientX, touch.clientY);
     });
 
@@ -47,6 +55,22 @@ export default class GameMain {
   handleTap(x, y) {
     const game = this.game;
     const r = this.renderer;
+
+    // 检查底部按钮点击（优先级更高）
+    const btnY = this.h - 55;
+    const btnW = (this.w - 40) / 4;
+    const btnGap = 5;
+
+    if (y >= btnY + 8 && y <= btnY + 43) {
+      for (let i = 0; i < 4; i++) {
+        const bx = 10 + i * (btnW + btnGap);
+        if (x >= bx && x <= bx + btnW) {
+          console.log(`[Tap] Button ${i} clicked`);
+          this.handleAction(i);
+          return;
+        }
+      }
+    }
 
     // 检查建筑卡片点击
     const startY = 115;
@@ -63,18 +87,10 @@ export default class GameMain {
       const by = startY + row * (cardH + gap) - r.scrollY;
 
       if (x >= bx && x <= bx + cardW && y >= by && y <= by + cardH) {
+        console.log(`[Tap] Building ${b.name} selected`);
         r.selectedBuilding = b.type;
         return;
       }
-    }
-
-    // 检查底部按钮点击
-    const btnY = this.h - 55;
-    if (y >= btnY + 8 && y <= btnY + 43) {
-      const btnW = (this.w - 40) / 4;
-      const btnIndex = Math.floor((x - 10) / (btnW + 5));
-      this.handleAction(btnIndex);
-      return;
     }
 
     r.selectedBuilding = null;
@@ -95,14 +111,22 @@ export default class GameMain {
               b.level = 1;
               b.state = BuildingState.NORMAL;
               console.log(`[Build] ${b.name} built!`);
+            } else {
+              console.log(`[Build] Not enough resources for ${b.name}`);
             }
-          } else if (b.state === BuildingState.NORMAL) {
+          } else if (b.state === BuildingState.NORMAL || b.state === BuildingState.PRODUCING) {
             const cost = b.getUpgradeCost();
             if (game.wallet.consume(cost)) {
               b.startUpgrade(Date.now());
               console.log(`[Upgrade] ${b.name} upgrading to Lv.${b.level + 1}`);
+            } else {
+              console.log(`[Upgrade] Not enough resources for ${b.name}`);
             }
+          } else {
+            console.log(`[Upgrade] ${b.name} state: ${b.state}, cannot upgrade`);
           }
+        } else {
+          console.log('[Upgrade] No building selected');
         }
         break;
 
@@ -112,13 +136,19 @@ export default class GameMain {
           if (b.isUnlocked() && b.maxSlots > 0) {
             const idle = game.workers.workers.find(w => w.state === WorkerState.IDLE);
             if (idle && b.assignedWorkers.length < b.maxSlots) {
-              idle.state = 'WK_WORKING';
+              idle.state = WorkerState.WORKING;
               idle.assignedBuilding = b.type;
               b.assignedWorkers.push(idle.workerId);
               if (b.state === BuildingState.NORMAL) b.state = BuildingState.PRODUCING;
               console.log(`[Assign] ${idle.name} -> ${b.name}`);
+            } else {
+              console.log(`[Assign] No idle workers or building full`);
             }
+          } else {
+            console.log(`[Assign] Building not unlocked or no slots`);
           }
+        } else {
+          console.log('[Assign] No building selected');
         }
         break;
 
@@ -128,6 +158,8 @@ export default class GameMain {
           if (furnace.state === BuildingState.FROZEN) {
             furnace.state = BuildingState.NORMAL;
             console.log('[Furnace] Restarted');
+          } else {
+            console.log(`[Furnace] State: ${furnace.state}, cannot restart`);
           }
         }
         break;

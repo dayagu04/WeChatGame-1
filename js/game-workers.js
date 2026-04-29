@@ -63,7 +63,7 @@ export class WorkerManager {
       if (w.state === WorkerState.DEAD) continue;
 
       // 饱食度衰减
-      const decay = w.state === WorkerState.WORKING ? 0.8 : 0.5;
+      const decay = w.state === WorkerState.WORKING ? 0.15 : 0.08;
       w.hunger = Math.max(0, w.hunger - decay);
 
       // hunger=0 计时
@@ -73,14 +73,14 @@ export class WorkerManager {
       // 健康度结算
       const T = tileTemp || -20;
       if (T >= 0) {
-        w.health = Math.min(100, w.health + 2.0);
+        w.health = Math.min(100, w.health + 0.3);
       } else {
-        w.health = Math.max(0, w.health - 0.5 * Math.abs(T));
+        w.health = Math.max(0, w.health - 0.02 * Math.abs(T));
       }
 
       // 心情
-      if (w.health < 30) w.mood = Math.max(0, w.mood - 0.5);
-      else if (w.hunger > 70 && w.health > 70) w.mood = Math.min(100, w.mood + 0.2);
+      if (w.health < 30) w.mood = Math.max(0, w.mood - 0.1);
+      else if (w.hunger > 70 && w.health > 70) w.mood = Math.min(100, w.mood + 0.05);
 
       // Priority 1: 死亡
       if (w.state === WorkerState.SICK && w.sickTimestampMs && now - w.sickTimestampMs > 3600000) {

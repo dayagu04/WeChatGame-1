@@ -74,7 +74,7 @@ export class Building {
   }
 
   startUpgrade(now) {
-    if (this.state !== BuildingState.NORMAL) return false;
+    if (this.state !== BuildingState.NORMAL && this.state !== BuildingState.PRODUCING) return false;
     this.state = BuildingState.UPGRADING;
     this.upgradeStartTimeMs = now;
     this.upgradeDurationMs = this.getUpgradeTimeMs();
