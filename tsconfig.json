@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["src/00_Core/*"],
+      "@city/*": ["src/01_City_System/*"],
+      "@survival/*": ["src/02_Survival_System/*"],
+      "@combat/*": ["src/03_Combat_System/*"],
+      "@economy/*": ["src/04_Economy_System/*"],
+      "@ui/*": ["src/05_UI_Interaction/*"],
+      "@infra/*": ["src/06_Infrastructure/*"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "md", "md_backup"]
+}

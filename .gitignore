@@ -28,8 +28,10 @@ project.private.config.json
 *.swp
 *~
 
-# Optional: compiled output
-# dist/
-#文档
+# Compiled output
+dist/
+
+# 文档
 docs/
 md/
+md_backup/
