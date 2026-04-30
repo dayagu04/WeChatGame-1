@@ -4,22 +4,16 @@
 // ==========================================
 
 import './render';
-import { SCREEN_WIDTH, SCREEN_HEIGHT, PIXEL_RATIO } from './render';
 import { BuildingType, BuildingState, ResourceType, WorkerState } from './game-constants';
 import { GameLoop } from './game-loop';
 import { GameRenderer } from './game-renderer';
 
 export default class GameMain {
   constructor() {
-    // Canvas 初始化
+    // Canvas 初始化（render.js 已设置 canvas.width/height 为 CSS 像素）
     this.ctx = canvas.getContext('2d');
-    // 逻辑尺寸（CSS 像素），用于布局和触摸坐标
-    this.w = SCREEN_WIDTH;
-    this.h = SCREEN_HEIGHT;
-    // 设置 canvas 物理尺寸
-    canvas.width = SCREEN_WIDTH * PIXEL_RATIO;
-    canvas.height = SCREEN_HEIGHT * PIXEL_RATIO;
-    this.ctx.scale(PIXEL_RATIO, PIXEL_RATIO);
+    this.w = canvas.width;
+    this.h = canvas.height;
 
     // 核心系统
     this.game = new GameLoop();
