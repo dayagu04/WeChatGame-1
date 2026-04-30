@@ -3,9 +3,8 @@
 // Canvas 渲染：城市视图 + 资源栏 + 状态面板
 // ==========================================
 
-import { ResourceType, BuildingState, WeatherType, WorkerState, EXPEDITION_CONFIGS } from './game-constants';
+import { ResourceType, BuildingState, WeatherType, WorkerState, EXPEDITION_CONFIGS, BuildingType } from './game-constants';
 
-// 资源图标映射
 const RES_EMOJI = {
   [ResourceType.WOOD]: '🪵',
   [ResourceType.COAL]: '⬛',
@@ -39,10 +38,11 @@ const STATE_NAMES = {
 };
 
 export class GameRenderer {
-  constructor(ctx, width, height) {
+  constructor(ctx, width, height, safeTop) {
     this.ctx = ctx;
     this.w = width;
     this.h = height;
+    this.safeTop = safeTop || 0;
     this.selectedBuilding = null;
     this.scrollY = 0;
   }
@@ -51,7 +51,7 @@ export class GameRenderer {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, this.w, this.h);
 
-    // 背景：冷色调渐变
+    // 背景
     const grad = ctx.createLinearGradient(0, 0, 0, this.h);
     grad.addColorStop(0, '#1a1a2e');
     grad.addColorStop(1, '#16213e');
@@ -65,10 +65,10 @@ export class GameRenderer {
     this.drawBottomBar(gameLoop);
   }
 
-  // ---- 顶部资源栏 ----
+  // ---- 顶部资源栏（safeTop 偏移）----
   drawResourceBar(gameLoop) {
     const ctx = this.ctx;
-    const y = 10;
+    const y = this.safeTop + 10;
     const resources = [
       { type: ResourceType.WOOD, label: '木材' },
       { type: ResourceType.COAL, label: '煤炭' },
@@ -102,24 +102,29 @@ export class GameRenderer {
   // ---- 天气信息 ----
   drawWeatherInfo(gameLoop) {
     const ctx = this.ctx;
-    const y = 75;
+    const y = this.safeTop + 75;
     const w = gameLoop.weather;
     const emoji = WEATHER_EMOJI[w.currentWeather] || '☀️';
     const temp = w.getGlobalTemperature();
+    const furnace = gameLoop.buildings.get(BuildingType.FURNACE);
+    const furnaceLv = furnace.isUnlocked() ? furnace.level : 0;
+    const warmth = furnaceLv > 0 && furnace.state !== BuildingState.FROZEN ? furnaceLv * 2 : 0;
+    const effective = temp + warmth;
 
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(5, y, this.w - 10, 30);
 
     ctx.font = 'bold 14px monospace';
-    ctx.fillStyle = temp < -30 ? '#ff4444' : temp < -10 ? '#ffaa00' : '#44ff44';
+    ctx.fillStyle = effective < -30 ? '#ff4444' : effective < -10 ? '#ffaa00' : '#44ff44';
     const blizName = BLIZZARD_NAMES[w.blizzardState] || w.blizzardState;
-    ctx.fillText(`${emoji} 温度: ${temp.toFixed(1)}°C  |  暴风雪: ${blizName}  |  Tick: ${gameLoop.tickCount}`, 15, y + 20);
+    const warmthStr = warmth > 0 ? ` (+${warmth}🔥)` : '';
+    ctx.fillText(`${emoji} 温度: ${effective.toFixed(1)}°C${warmthStr}  |  暴风雪: ${blizName}`, 15, y + 20);
   }
 
   // ---- 建筑网格 ----
   drawBuildingGrid(gameLoop) {
     const ctx = this.ctx;
-    const startY = 115;
+    const startY = this.safeTop + 115;
     const cardW = (this.w - 30) / 2;
     const cardH = 70;
     const gap = 5;
@@ -134,15 +139,14 @@ export class GameRenderer {
       const x = 10 + col * (cardW + gap);
       const y = startY + row * (cardH + gap) - this.scrollY;
 
-      // 卡片背景
       const isSelected = this.selectedBuilding === b.type;
       ctx.fillStyle = isSelected ? 'rgba(100,149,237,0.3)' : 'rgba(255,255,255,0.08)';
       ctx.fillRect(x, y, cardW, cardH);
       ctx.strokeStyle = isSelected ? '#6495ed' : 'rgba(255,255,255,0.15)';
       ctx.strokeRect(x, y, cardW, cardH);
 
-      // 建筑信息
-      ctx.fillStyle = '#fff';
+      // 建筑名（锁定建筑灰色）
+      ctx.fillStyle = b.isUnlocked() ? '#fff' : '#888';
       ctx.font = 'bold 14px monospace';
       ctx.fillText(`${b.emoji} ${b.name} Lv.${b.level}`, x + 8, y + 20);
 
@@ -166,8 +170,15 @@ export class GameRenderer {
         ctx.fillText(`${remainSec}s`, x + 8 + barW / 2 - 10, y + 55);
       }
 
-      // 升级费用
-      if (b.isUnlocked() && (b.state === BuildingState.NORMAL || b.state === BuildingState.PRODUCING)) {
+      // 升级费用 / 建造提示
+      if (!b.isUnlocked()) {
+        const cost = b.getUpgradeCost();
+        const costType = Object.keys(cost)[0];
+        const costVal = cost[costType];
+        ctx.font = '10px monospace';
+        ctx.fillStyle = gameLoop.wallet.canAfford(cost) ? '#4ecdc4' : '#ff6b6b';
+        ctx.fillText(`建造: ${costVal} ${costType.replace('RES_', '')}`, x + 8, y + 62);
+      } else if (b.state === BuildingState.NORMAL || b.state === BuildingState.PRODUCING) {
         const cost = b.getUpgradeCost();
         const costType = Object.keys(cost)[0];
         const costVal = cost[costType];
@@ -183,7 +194,7 @@ export class GameRenderer {
     const ctx = this.ctx;
     const buildings = gameLoop.buildings.getAll();
     const gridRows = Math.ceil(buildings.length / 2);
-    const startY = 115 + gridRows * 75 + 10;
+    const startY = this.safeTop + 115 + gridRows * 75 + 10;
 
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(5, startY, this.w - 10, 100);
@@ -231,13 +242,26 @@ export class GameRenderer {
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(0, y, this.w, 55);
 
-    // 操作按钮（上下文感知）
-    const furnace = gameLoop.buildings.get('BLD_FURNACE');
-    const btn3Label = furnace && furnace.state === 6 ? '🔥 重启火炉' : (gameLoop.paused ? '▶️ 继续' : '⏸️ 暂停');
+    const furnace = gameLoop.buildings.get(BuildingType.FURNACE);
+    const btn3Label = furnace && furnace.state === BuildingState.FROZEN
+      ? '🔥 重启火炉'
+      : (gameLoop.paused ? '▶️ 继续' : '⏸️ 暂停');
+
+    // 选中锁定建筑时，按钮2显示"建造"，否则显示"探索"
+    let btn2Label = '🧭 探索';
+    if (this.selectedBuilding) {
+      const sel = gameLoop.buildings.get(this.selectedBuilding);
+      if (sel && !sel.isUnlocked()) {
+        btn2Label = '🏗️ 建造';
+      } else if (sel && sel.isUnlocked()) {
+        btn2Label = '👷 分配';
+      }
+    }
+
     const buttons = [
       { label: '🔨 升级' },
       { label: '👷 分配' },
-      { label: '🧭 探索' },
+      { label: btn2Label },
       { label: btn3Label },
     ];
 

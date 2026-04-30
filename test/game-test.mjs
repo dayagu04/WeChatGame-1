@@ -436,6 +436,22 @@ describe('庇护所饱食度减免', () => {
   });
 });
 
+describe('火炉温度加成', () => {
+  it('火炉加温应该减少工人掉血', () => {
+    const wm1 = new WorkerManager();
+    const w1 = wm1.addWorker();
+    wm1.tickAll(-20, () => false, 0); // 无火炉加温，-20°C
+    const decay1 = 80 - w1.health;
+
+    const wm2 = new WorkerManager();
+    const w2 = wm2.addWorker();
+    wm2.tickAll(-14, () => false, 0); // 火炉Lv3加温+6°C → -14°C
+    const decay2 = 80 - w2.health;
+
+    expect(decay2).toBeLessThan(decay1);
+  });
+});
+
 describe('停工自动恢复', () => {
   it('HALTED_NO_WORKER 在分配工人后应该恢复', () => {
     const game = new GameLoop();

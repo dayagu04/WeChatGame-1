@@ -57,18 +57,20 @@ export class GameLoop {
 
   onTick() {
     const now = Date.now();
-    const temp = this.weather.getGlobalTemperature();
+    const envTemp = this.weather.getGlobalTemperature();
     const coalMult = this.weather.getCoalMultiplier();
 
     // Phase 1: 天气
     this.weather.tick();
 
-    // Phase 1: 火炉煤炭消耗
+    // Phase 1: 火炉煤炭消耗 + 温度加成
     const furnace = this.buildings.get(BuildingType.FURNACE);
+    let warmth = 0;
     if (furnace.isUnlocked() && furnace.state !== BuildingState.FROZEN) {
       const coalCost = (0.5 + furnace.level * 0.3) * coalMult;
       if (this.wallet.get(ResourceType.COAL) >= coalCost) {
         this.wallet.resources[ResourceType.COAL] -= coalCost;
+        warmth = furnace.level * 2; // 每级火炉 +2°C
       } else {
         furnace.state = BuildingState.FROZEN;
         eventBus.emit(GlobalEvents.BUILDING_STATE_CHANGE, {
@@ -80,7 +82,8 @@ export class GameLoop {
     // Phase 2: 工人维生（传入庇护所等级）
     const shelter = this.buildings.get(BuildingType.SHELTER);
     const shelterLevel = shelter.isUnlocked() ? shelter.level : 0;
-    this.workers.tickAll(temp, () => {
+    const effectiveTemp = envTemp + warmth;
+    this.workers.tickAll(effectiveTemp, () => {
       if (this.wallet.get(ResourceType.RATION) > 0) {
         this.wallet.resources[ResourceType.RATION]--;
         return true;
