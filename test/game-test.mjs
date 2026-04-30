@@ -81,7 +81,7 @@ function expect(val) {
 }
 
 // --- 导入游戏模块 ---
-import { ResourceType, BuildingType, BuildingState, WorkerState, GAME_CONSTANTS } from '../js/game-constants.js';
+import { ResourceType, BuildingType, BuildingState, WorkerState, GAME_CONSTANTS, EXPEDITION_CONFIGS } from '../js/game-constants.js';
 import { WalletManager } from '../js/game-wallet.js';
 import { Building, BuildingManager } from '../js/game-buildings.js';
 import { Worker, WorkerManager } from '../js/game-workers.js';
@@ -356,6 +356,101 @@ describe('GameLoop 完整流程', () => {
     game.onTick();
     // 煤矿产出 - 火炉消耗 = 净产出
     expect(game.wallet.get(ResourceType.COAL)).toBeGreaterThan(beforeCoal - 1);
+  });
+});
+
+describe('探索系统', () => {
+  it('startExpedition 应该将工人设为 EXPLORING', () => {
+    const wm = new WorkerManager();
+    const w = wm.addWorker();
+    const ok = wm.startExpedition(w.workerId, 'EXP_WOOD');
+    expect(ok).toBeTruthy();
+    expect(w.state).toBe(WorkerState.EXPLORING);
+    expect(w.expeditionId).toBe('EXP_WOOD');
+  });
+
+  it('非 IDLE 工人不能探索', () => {
+    const wm = new WorkerManager();
+    const w = wm.addWorker();
+    w.state = WorkerState.WORKING;
+    const ok = wm.startExpedition(w.workerId, 'EXP_WOOD');
+    expect(ok).toBeFalsy();
+  });
+
+  it('getExploringCount 应该正确计数', () => {
+    const wm = new WorkerManager();
+    wm.addWorker();
+    wm.addWorker();
+    wm.workers[0].state = WorkerState.EXPLORING;
+    expect(wm.getExploringCount()).toBe(1);
+  });
+
+  it('tickExpeditions 探索完成后应该恢复 IDLE 并获得奖励', () => {
+    const wm = new WorkerManager();
+    const wallet = new WalletManager();
+    const w = wm.addWorker();
+    w.state = WorkerState.EXPLORING;
+    w.expeditionId = 'EXP_WOOD';
+    w.expeditionStartMs = Date.now() - 60000; // 60秒前开始
+
+    const weather = new WeatherManager();
+    const beforeWood = wallet.get(ResourceType.WOOD);
+    wm.tickExpeditions(wallet, weather);
+    expect(w.state).toBe(WorkerState.IDLE);
+    expect(w.expeditionId).toBe(null);
+    expect(wallet.get(ResourceType.WOOD)).toBeGreaterThan(beforeWood);
+  });
+
+  it('极寒天气应该取消探索', () => {
+    const wm = new WorkerManager();
+    const wallet = new WalletManager();
+    const w = wm.addWorker();
+    w.state = WorkerState.EXPLORING;
+    w.expeditionId = 'EXP_WOOD';
+    w.expeditionStartMs = Date.now();
+
+    const weather = new WeatherManager();
+    // 模拟极寒：暴风雪活跃 + 温度 < -30
+    weather.blizzardState = 'BLZ_ACTIVE';
+    weather.tempModifier = -40; // -20 + (-40) = -60
+    wm.tickExpeditions(wallet, weather);
+    expect(w.state).toBe(WorkerState.IDLE);
+  });
+});
+
+describe('庇护所饱食度减免', () => {
+  it('庇护所等级应该降低饱食衰减', () => {
+    const wm1 = new WorkerManager();
+    const w1 = wm1.addWorker();
+    w1.state = WorkerState.WORKING;
+    wm1.tickAll(-20, () => false, 0); // 无庇护所
+    const decay1 = 80 - w1.hunger;
+
+    const wm2 = new WorkerManager();
+    const w2 = wm2.addWorker();
+    w2.state = WorkerState.WORKING;
+    wm2.tickAll(-20, () => false, 10); // 庇护所10级 → 减免10%
+    const decay2 = 80 - w2.hunger;
+
+    expect(decay2).toBeLessThan(decay1);
+  });
+});
+
+describe('停工自动恢复', () => {
+  it('HALTED_NO_WORKER 在分配工人后应该恢复', () => {
+    const game = new GameLoop();
+    const coal = game.buildings.get(BuildingType.COAL_MINE);
+    coal.level = 1;
+    coal.state = BuildingState.HALTED_NO_WORKER;
+
+    // 分配工人
+    const idle = game.workers.workers.find(w => w.state === WorkerState.IDLE);
+    idle.state = WorkerState.WORKING;
+    idle.assignedBuilding = BuildingType.COAL_MINE;
+    coal.assignedWorkers.push(idle.workerId);
+
+    game.onTick();
+    expect(coal.state).toBe(BuildingState.PRODUCING);
   });
 });
 

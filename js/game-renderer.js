@@ -3,7 +3,7 @@
 // Canvas 渲染：城市视图 + 资源栏 + 状态面板
 // ==========================================
 
-import { ResourceType, BuildingState, WeatherType, WorkerState } from './game-constants';
+import { ResourceType, BuildingState, WeatherType, WorkerState, EXPEDITION_CONFIGS } from './game-constants';
 
 // 资源图标映射
 const RES_EMOJI = {
@@ -193,7 +193,8 @@ export class GameRenderer {
     const alive = gameLoop.workers.getAlive();
     const working = gameLoop.workers.getWorkingCount();
     const sick = gameLoop.workers.getSickCount();
-    ctx.fillText(`👷 幸存者: ${alive.length}  工作中: ${working}  生病: ${sick}`, 15, startY + 20);
+    const exploring = gameLoop.workers.getExploringCount();
+    ctx.fillText(`👷 幸存者: ${alive.length}  工作: ${working}  探索: ${exploring}  生病: ${sick}`, 15, startY + 20);
 
     ctx.font = '11px monospace';
     let yy = startY + 38;
@@ -201,11 +202,21 @@ export class GameRenderer {
       const stateEmoji = w.state === WorkerState.WORKING ? '⚒️'
         : w.state === WorkerState.SICK ? '🤒'
         : w.state === WorkerState.HEALING ? '💊'
+        : w.state === WorkerState.EXPLORING ? '🧭'
         : w.state === WorkerState.EATING ? '🍽️'
         : '🚶';
       ctx.fillStyle = w.health < 30 ? '#ff6b6b' : '#ccc';
+      let extra = '';
+      if (w.state === WorkerState.EXPLORING && w.expeditionId) {
+        const cfg = EXPEDITION_CONFIGS.find(e => e.id === w.expeditionId);
+        if (cfg) {
+          const elapsed = Date.now() - w.expeditionStartMs;
+          const remain = Math.max(0, Math.ceil((cfg.durationMs - elapsed) / 1000));
+          extra = ` [${cfg.name} ${remain}s]`;
+        }
+      }
       ctx.fillText(
-        `${stateEmoji} ${w.name} | ❤️${Math.floor(w.health)} 🍖${Math.floor(w.hunger)} 😊${Math.floor(w.mood)}`,
+        `${stateEmoji} ${w.name} | ❤️${Math.floor(w.health)} 🍖${Math.floor(w.hunger)} 😊${Math.floor(w.mood)}${extra}`,
         15, yy
       );
       yy += 15;
@@ -220,12 +231,14 @@ export class GameRenderer {
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(0, y, this.w, 55);
 
-    // 操作按钮
+    // 操作按钮（上下文感知）
+    const furnace = gameLoop.buildings.get('BLD_FURNACE');
+    const btn3Label = furnace && furnace.state === 6 ? '🔥 重启火炉' : (gameLoop.paused ? '▶️ 继续' : '⏸️ 暂停');
     const buttons = [
-      { label: '🔨 升级', action: 'upgrade' },
-      { label: '👷 分配工人', action: 'assign' },
-      { label: '🔥 开启火炉', action: 'furnace' },
-      { label: '⏸️ 暂停', action: 'pause' },
+      { label: '🔨 升级' },
+      { label: '👷 分配' },
+      { label: '🧭 探索' },
+      { label: btn3Label },
     ];
 
     const btnW = (this.w - 40) / 4;

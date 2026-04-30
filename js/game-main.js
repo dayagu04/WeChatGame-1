@@ -4,7 +4,7 @@
 // ==========================================
 
 import './render';
-import { BuildingType, BuildingState, ResourceType, WorkerState } from './game-constants';
+import { BuildingType, BuildingState, ResourceType, WorkerState, EXPEDITION_CONFIGS } from './game-constants';
 import { GameLoop } from './game-loop';
 import { GameRenderer } from './game-renderer';
 
@@ -18,6 +18,9 @@ export default class GameMain {
     // 核心系统
     this.game = new GameLoop();
     this.renderer = new GameRenderer(this.ctx, this.w, this.h);
+
+    // 探索选择索引（循环选择不同探索任务）
+    this.expeditionIndex = 0;
 
     // 触摸输入
     this.touchStartY = 0;
@@ -95,11 +98,10 @@ export default class GameMain {
     const selected = this.renderer.selectedBuilding;
 
     switch (btnIndex) {
-      case 0: // 升级
+      case 0: // 升级 / 建造
         if (selected) {
           const b = game.buildings.get(selected);
           if (!b.isUnlocked()) {
-            // 建造
             const cost = b.getUpgradeCost();
             if (game.wallet.consume(cost)) {
               b.level = 1;
@@ -146,21 +148,37 @@ export default class GameMain {
         }
         break;
 
-      case 2: // 开启火炉
+      case 2: // 探索
+        {
+          const temp = game.weather.getGlobalTemperature();
+          if (temp < -30) {
+            console.log('[Explore] Too cold for exploration!');
+            break;
+          }
+          const idle = game.workers.workers.find(w => w.state === WorkerState.IDLE);
+          if (!idle) {
+            console.log('[Explore] No idle workers available');
+            break;
+          }
+          const config = EXPEDITION_CONFIGS[this.expeditionIndex % EXPEDITION_CONFIGS.length];
+          this.expeditionIndex++;
+          if (game.workers.startExpedition(idle.workerId, config.id)) {
+            console.log(`[Explore] ${idle.name} sent on "${config.name}"`);
+          }
+        }
+        break;
+
+      case 3: // 火炉重启 / 暂停
         {
           const furnace = game.buildings.get(BuildingType.FURNACE);
           if (furnace.state === BuildingState.FROZEN) {
             furnace.state = BuildingState.NORMAL;
             console.log('[Furnace] Restarted');
           } else {
-            console.log(`[Furnace] State: ${furnace.state}, cannot restart`);
+            game.paused = !game.paused;
+            console.log(game.paused ? '[Paused]' : '[Resumed]');
           }
         }
-        break;
-
-      case 3: // 暂停
-        game.paused = !game.paused;
-        console.log(game.paused ? '[Paused]' : '[Resumed]');
         break;
     }
   }

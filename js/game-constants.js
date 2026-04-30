@@ -44,6 +44,7 @@ export const WorkerState = {
   SICK: 'WK_SICK',
   HEALING: 'WK_HEALING',
   PROTESTING: 'WK_PROTESTING',
+  EXPLORING: 'WK_EXPLORING',
   DEAD: 'WK_DEAD',
 };
 
@@ -82,6 +83,7 @@ export const GlobalEvents = {
   WORKER_DIED: 'EVT_WORKER_DIED',
   TICK_UPDATE: 'EVT_TICK_UPDATE',
   WEATHER_CHANGED: 'EVT_WEATHER_CHANGED',
+  EXPEDITION_COMPLETE: 'EVT_EXPEDITION_COMPLETE',
 };
 
 // ==========================================
@@ -118,3 +120,12 @@ class EventBus {
 }
 
 export const eventBus = new EventBus();
+
+// ---- 探险任务配置 ----
+export const EXPEDITION_CONFIGS = [
+  { id: 'EXP_WOOD',  name: '伐木远征', durationMs: 30000,  rewardType: ResourceType.WOOD,  minReward: 30, maxReward: 80,  risk: 0.05 },
+  { id: 'EXP_COAL',  name: '矿洞探索', durationMs: 60000,  rewardType: ResourceType.COAL,  minReward: 20, maxReward: 50,  risk: 0.10 },
+  { id: 'EXP_MEAT',  name: '狩猎行动', durationMs: 45000,  rewardType: ResourceType.MEAT,  minReward: 15, maxReward: 40,  risk: 0.08 },
+  { id: 'EXP_IRON',  name: '废墟挖掘', durationMs: 90000,  rewardType: ResourceType.IRON,  minReward: 10, maxReward: 30,  risk: 0.15 },
+  { id: 'EXP_GEM',   name: '冰原寻宝', durationMs: 120000, rewardType: ResourceType.GEM,   minReward: 3,  maxReward: 10,  risk: 0.20 },
+];

@@ -71,33 +71,92 @@ export class GameLoop {
         this.wallet.resources[ResourceType.COAL] -= coalCost;
       } else {
         furnace.state = BuildingState.FROZEN;
+        eventBus.emit(GlobalEvents.BUILDING_STATE_CHANGE, {
+          buildingId: furnace.instanceId, newState: BuildingState.FROZEN,
+        });
       }
     }
 
-    // Phase 2: 工人维生
+    // Phase 2: 工人维生（传入庇护所等级）
+    const shelter = this.buildings.get(BuildingType.SHELTER);
+    const shelterLevel = shelter.isUnlocked() ? shelter.level : 0;
     this.workers.tickAll(temp, () => {
       if (this.wallet.get(ResourceType.RATION) > 0) {
         this.wallet.resources[ResourceType.RATION]--;
         return true;
       }
       return false;
-    });
+    }, shelterLevel);
 
-    // Phase 3: 建筑生产
+    // Phase 3: 建筑生产 + 特殊建筑逻辑
     for (const b of this.buildings.getUnlocked()) {
       b.tickUpgrade(now);
 
+      // 停工恢复：有工人分配时自动恢复
+      if (b.state === BuildingState.HALTED_NO_WORKER) {
+        const hasWorker = this.workers.workers.some(
+          w => w.assignedBuilding === b.type && w.state === WorkerState.WORKING
+        );
+        if (hasWorker) {
+          b.state = BuildingState.PRODUCING;
+        }
+      }
+
+      // 停工恢复：原材料充足时自动恢复
+      if (b.state === BuildingState.HALTED_NO_MATERIAL) {
+        if (b.type === BuildingType.COOKHOUSE) {
+          if (this.wallet.get(ResourceType.MEAT) >= 1) {
+            b.state = BuildingState.PRODUCING;
+          }
+        }
+      }
+
+      // 生产逻辑
       if (b.state === BuildingState.PRODUCING || b.state === BuildingState.NORMAL) {
         const workersHere = this.workers.workers.filter(
           w => w.assignedBuilding === b.type && w.state === WorkerState.WORKING
         );
+
+        // 医疗站特殊逻辑：治愈生病工人
+        if (b.type === BuildingType.CLINIC && workersHere.length > 0) {
+          this.tickClinic(b, workersHere.length);
+        }
+
         if (workersHere.length > 0) {
           const output = this.getBuildingOutput(b.type, workersHere.length);
           if (output) {
-            this.wallet.add(output.type, output.amount);
+            const added = this.wallet.add(output.type, output.amount);
+            // 厨房没原料时进入停工状态
+            if (b.type === BuildingType.COOKHOUSE && added === 0 && output.amount > 0) {
+              b.state = BuildingState.HALTED_NO_MATERIAL;
+            }
+          }
+        } else if (b.maxSlots > 0 && b.assignedWorkers.length === 0) {
+          // 有槽位但没工人 → 停工
+          if (b.type !== BuildingType.FURNACE && b.type !== BuildingType.SHELTER) {
+            b.state = BuildingState.HALTED_NO_WORKER;
           }
         }
       }
+    }
+
+    // Phase 4: 探索结算
+    this.workers.tickExpeditions(this.wallet, this.weather);
+  }
+
+  // 医疗站治愈逻辑
+  tickClinic(clinic, doctorCount) {
+    const healCapacity = Math.max(1, doctorCount); // 每个医生治愈1人
+    const sickWorkers = this.workers.workers.filter(w => w.state === WorkerState.SICK);
+    let healed = 0;
+    for (const w of sickWorkers) {
+      if (healed >= healCapacity) break;
+      w.state = WorkerState.HEALING;
+      w.sickTimestampMs = 0;
+      healed++;
+      eventBus.emit(GlobalEvents.WORKER_STATE_CHANGE, {
+        workerId: w.workerId, newState: WorkerState.HEALING,
+      });
     }
   }
 
@@ -110,11 +169,14 @@ export class GameLoop {
       case BuildingType.HUNTER_HUT:
         return { type: ResourceType.MEAT, amount: 1.0 * workerCount };
       case BuildingType.COOKHOUSE:
-        // 加工：消耗生肉产出熟食
         if (this.wallet.get(ResourceType.MEAT) >= 1 * workerCount) {
           this.wallet.resources[ResourceType.MEAT] -= 1 * workerCount;
           return { type: ResourceType.RATION, amount: 0.8 * workerCount };
         }
+        return null;
+      // 医疗站和庇护所不产出资源
+      case BuildingType.CLINIC:
+      case BuildingType.SHELTER:
         return null;
       default:
         return null;
