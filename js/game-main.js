@@ -44,7 +44,8 @@ export default class GameMain {
     wx.onTouchMove((e) => {
       const touch = e.touches[0];
       const dy = touch.clientY - this.touchStartY;
-      this.renderer.scrollY = Math.max(0, this.renderer.scrollY - dy);
+      const maxScroll = this.renderer.maxScrollY || 500;
+      this.renderer.scrollY = Math.max(0, Math.min(maxScroll, this.renderer.scrollY - dy));
       this.touchStartY = touch.clientY;
     });
   }
@@ -88,21 +89,27 @@ export default class GameMain {
       }
     }
 
-    // 检查建筑卡片点击（Y 坐标含 safeTop 偏移）
-    const startY = safeTop + 115;
-    const cardW = (this.w - 30) / 2;
-    const cardH = 70;
-    const gap = 5;
+    // 检查建筑卡片点击（与 game-renderer.js 布局一致）
+    const SCENE_TOP_OFFSET = 96; // RESOURCE_BAR_H + WEATHER_BAR_H + 8
+    const BUILDING_COLS = 2;
+    const BUILDING_CARD_W = 150;
+    const BUILDING_CARD_H = 100;
+    const BUILDING_GAP = 12;
+
+    const sceneAreaTop = safeTop + SCENE_TOP_OFFSET;
+    const gridW = BUILDING_COLS * BUILDING_CARD_W + (BUILDING_COLS - 1) * BUILDING_GAP;
+    const startX = (this.w - gridW) / 2;
+    const startY = sceneAreaTop + 10 - r.scrollY;
     const buildings = game.buildings.getAll();
 
     for (let i = 0; i < buildings.length; i++) {
       const b = buildings[i];
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const bx = 10 + col * (cardW + gap);
-      const by = startY + row * (cardH + gap) - r.scrollY;
+      const col = i % BUILDING_COLS;
+      const row = Math.floor(i / BUILDING_COLS);
+      const bx = startX + col * (BUILDING_CARD_W + BUILDING_GAP);
+      const by = startY + row * (BUILDING_CARD_H + BUILDING_GAP);
 
-      if (x >= bx && x <= bx + cardW && y >= by && y <= by + cardH) {
+      if (x >= bx && x <= bx + BUILDING_CARD_W && y >= by && y <= by + BUILDING_CARD_H) {
         r.selectedBuilding = b.type;
         console.log(`[Tap] Building "${b.name}" selected (state=${b.state}, lv=${b.level})`);
         return;
