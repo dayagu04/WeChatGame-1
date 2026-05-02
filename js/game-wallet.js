@@ -75,4 +75,17 @@ export class WalletManager {
     }
     return true;
   }
+
+  serialize() {
+    return {
+      resources: { ...this.resources },
+      warehouseLevel: this.warehouseLevel,
+    };
+  }
+
+  deserialize(data) {
+    if (!data) return;
+    if (data.resources) Object.assign(this.resources, data.resources);
+    if (data.warehouseLevel) this.warehouseLevel = data.warehouseLevel;
+  }
 }

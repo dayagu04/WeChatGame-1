@@ -8,6 +8,7 @@ import { SAFE_TOP } from './render';
 import { BuildingType, BuildingState, ResourceType, WorkerState, EXPEDITION_CONFIGS, eventBus, GlobalEvents } from './game-constants';
 import { GameLoop } from './game-loop';
 import { GameRenderer } from './game-renderer';
+import { PersistenceManager } from './game-persistence';
 
 export default class GameMain {
   constructor() {
@@ -18,6 +19,7 @@ export default class GameMain {
     // 核心系统
     this.game = new GameLoop();
     this.renderer = new GameRenderer(this.ctx, this.w, this.h, SAFE_TOP);
+    this.persistence = new PersistenceManager(this.game);
 
     // 探索选择索引
     this.expeditionIndex = 0;
@@ -27,8 +29,15 @@ export default class GameMain {
     this.setupInput();
     this.setupLogging();
 
+    // 加载存档
+    const loaded = this.persistence.load();
+    if (loaded) {
+      console.log('[EndlessWinter] Save data loaded');
+    }
+
     // 启动
     this.game.start();
+    this.persistence.startAutoSave();
     this.startRenderLoop();
 
     console.log(`[EndlessWinter] Game started! safeTop=${SAFE_TOP}, canvas=${this.w}x${this.h}`);

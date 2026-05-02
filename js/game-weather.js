@@ -95,4 +95,29 @@ export class WeatherManager {
         break;
     }
   }
+
+  serialize() {
+    return {
+      currentWeather: this.currentWeather,
+      blizzardState: this.blizzardState,
+      blizzardTimerMs: this.blizzardTimerMs,
+      nextIndex: this.nextIndex,
+      tempModifier: this.tempModifier,
+      coalMultiplier: this.coalMultiplier,
+      lastEndTimeMs: this.lastEndTimeMs,
+      blizzardIntervalMs: this.blizzardIntervalMs,
+    };
+  }
+
+  deserialize(data) {
+    if (!data) return;
+    this.currentWeather = data.currentWeather || WeatherType.CLEAR;
+    this.blizzardState = data.blizzardState || BlizzardState.IDLE;
+    this.blizzardTimerMs = data.blizzardTimerMs || 0;
+    this.nextIndex = data.nextIndex || 0;
+    this.tempModifier = data.tempModifier || 0;
+    this.coalMultiplier = data.coalMultiplier || 1;
+    this.lastEndTimeMs = data.lastEndTimeMs || Date.now();
+    this.blizzardIntervalMs = data.blizzardIntervalMs || 300000;
+  }
 }

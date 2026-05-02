@@ -90,6 +90,7 @@ import { GameLoop } from '../js/game-loop.js';
 import { ResearchManager } from '../js/game-research.js';
 import { TradingManager } from '../js/game-trading.js';
 import { AchievementManager } from '../js/game-achievements.js';
+import { PersistenceManager } from '../js/game-persistence.js';
 
 // ==========================================
 // 测试用例
@@ -930,6 +931,116 @@ describe('AchievementManager - 成就系统', () => {
     expect(achEvent).toBeTruthy();
     expect(achEvent.achievementId).toBe('ACH_DAY_10');
     eventBus.clear();
+  });
+});
+
+describe('PersistenceManager - 存档系统', () => {
+  it('serialize 应该生成完整数据', () => {
+    const game = new GameLoop();
+    const pm = new PersistenceManager(game);
+    const data = pm.serialize();
+    expect(data.version).toBe(1);
+    expect(data.wallet).toBeTruthy();
+    expect(data.workers).toBeTruthy();
+    expect(data.buildings).toBeTruthy();
+    expect(data.research).toBeTruthy();
+    expect(data.trading).toBeTruthy();
+    expect(data.achievements).toBeTruthy();
+  });
+
+  it('serialize 应该包含当前状态', () => {
+    const game = new GameLoop();
+    game.tickCount = 42;
+    game.dayTicks = 15;
+    const pm = new PersistenceManager(game);
+    const data = pm.serialize();
+    expect(data.tickCount).toBe(42);
+    expect(data.dayTicks).toBe(15);
+  });
+
+  it('deserialize 应该恢复游戏状态', () => {
+    const game1 = new GameLoop();
+    game1.tickCount = 100;
+    game1.dayTicks = 50;
+    game1.wallet.add(ResourceType.WOOD, 999);
+    const pm1 = new PersistenceManager(game1);
+    const data = pm1.serialize();
+
+    const game2 = new GameLoop();
+    const pm2 = new PersistenceManager(game2);
+    pm2.deserialize(data);
+    expect(game2.tickCount).toBe(100);
+    expect(game2.dayTicks).toBe(50);
+    expect(game2.wallet.get(ResourceType.WOOD)).toBeGreaterThan(500);
+  });
+
+  it('deserialize 应该恢复工人状态', () => {
+    const game1 = new GameLoop();
+    game1.workers.workers[0].health = 42;
+    game1.workers.workers[0].name = '测试工人';
+    const pm1 = new PersistenceManager(game1);
+    const data = pm1.serialize();
+
+    const game2 = new GameLoop();
+    const pm2 = new PersistenceManager(game2);
+    pm2.deserialize(data);
+    expect(game2.workers.workers[0].health).toBe(42);
+    expect(game2.workers.workers[0].name).toBe('测试工人');
+  });
+
+  it('deserialize 应该恢复建筑状态', () => {
+    const game1 = new GameLoop();
+    const coal = game1.buildings.get(BuildingType.COAL_MINE);
+    coal.level = 3;
+    coal.state = BuildingState.PRODUCING;
+    const pm1 = new PersistenceManager(game1);
+    const data = pm1.serialize();
+
+    const game2 = new GameLoop();
+    const pm2 = new PersistenceManager(game2);
+    pm2.deserialize(data);
+    const coal2 = game2.buildings.get(BuildingType.COAL_MINE);
+    expect(coal2.level).toBe(3);
+    expect(coal2.state).toBe(BuildingState.PRODUCING);
+  });
+
+  it('deserialize 应该恢复研究状态', () => {
+    const game1 = new GameLoop();
+    game1.research.get('TECH_EFFICIENT_LUMBER').state = 3; // DONE
+    const pm1 = new PersistenceManager(game1);
+    const data = pm1.serialize();
+
+    const game2 = new GameLoop();
+    const pm2 = new PersistenceManager(game2);
+    pm2.deserialize(data);
+    expect(game2.research.get('TECH_EFFICIENT_LUMBER').state).toBe(3);
+  });
+
+  it('deserialize 应该恢复成就状态', () => {
+    const game1 = new GameLoop();
+    game1.tickCount = game1.dayLength * 10;
+    game1.achievements.tick(game1);
+    const pm1 = new PersistenceManager(game1);
+    const data = pm1.serialize();
+
+    const game2 = new GameLoop();
+    const pm2 = new PersistenceManager(game2);
+    pm2.deserialize(data);
+    expect(game2.achievements.get('ACH_DAY_10').unlocked).toBeTruthy();
+  });
+
+  it('save 应该返回 true（无 wx 环境时）', () => {
+    const game = new GameLoop();
+    const pm = new PersistenceManager(game);
+    const result = pm.save();
+    expect(result).toBeTruthy();
+  });
+
+  it('load 应该返回 false（无 wx 环境时）', () => {
+    const game = new GameLoop();
+    const pm = new PersistenceManager(game);
+    const result = pm.load();
+    expect(result).toBeFalsy();
   });
 });
 
