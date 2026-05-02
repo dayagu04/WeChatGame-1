@@ -37,6 +37,10 @@ const BUILDING_CONFIGS = {
     name: '庇护所', emoji: '🏠',
     baseCost: 120, costType: ResourceType.WOOD, baseTimeSec: 25, baseSlots: 0,
   },
+  [BuildingType.WORKSHOP]: {
+    name: '研究工坊', emoji: '🔬',
+    baseCost: 300, costType: ResourceType.WOOD, baseTimeSec: 45, baseSlots: 2,
+  },
 };
 
 function calcUpgradeCost(baseCost, level) {

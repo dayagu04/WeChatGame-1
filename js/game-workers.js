@@ -140,32 +140,31 @@ export class WorkerManager {
   }
 
   // --- 主 Tick ---
-  tickAll(tileTemp, consumeFood, shelterLevel) {
+  tickAll(tileTemp, consumeFood, shelterLevel, coldResist) {
     const now = Date.now();
-    // 庇护所减免：每级减 1% 饱食衰减，最多减 50%
     const shelterReduction = Math.min(0.5, (shelterLevel || 0) * 0.01);
+    const coldReduction = coldResist || 0; // 研究保暖 buff
 
     for (const w of this.workers) {
       if (w.state === WorkerState.DEAD) continue;
 
-      // 探索中的工人跳过大部分逻辑（但仍然掉饱食和健康）
       const isExploring = w.state === WorkerState.EXPLORING;
 
-      // 饱食度衰减（受庇护所减免）
+      // 饱食度衰减
       let decay = w.state === WorkerState.WORKING ? 0.15 : 0.08;
       decay *= (1 - shelterReduction);
       w.hunger = Math.max(0, w.hunger - decay);
 
-      // hunger=0 计时
       if (w.hunger <= 0 && !w.zeroHungerTs) w.zeroHungerTs = now;
       else if (w.hunger > 0) w.zeroHungerTs = 0;
 
-      // 健康度结算（探索中工人也结算）
+      // 健康度结算（应用保暖减免）
       const T = tileTemp || -20;
       if (T >= 0) {
         w.health = Math.min(100, w.health + 0.3);
       } else {
-        w.health = Math.max(0, w.health - 0.02 * Math.abs(T));
+        const coldDmg = 0.02 * Math.abs(T) * (1 - coldReduction);
+        w.health = Math.max(0, w.health - coldDmg);
       }
 
       // 医疗站治愈：SICK 工人自动变为 HEALING

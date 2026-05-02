@@ -81,12 +81,13 @@ function expect(val) {
 }
 
 // --- 导入游戏模块 ---
-import { ResourceType, BuildingType, BuildingState, WorkerState, GAME_CONSTANTS, EXPEDITION_CONFIGS } from '../js/game-constants.js';
+import { ResourceType, BuildingType, BuildingState, WorkerState, GAME_CONSTANTS, EXPEDITION_CONFIGS, TechState } from '../js/game-constants.js';
 import { WalletManager } from '../js/game-wallet.js';
 import { Building, BuildingManager } from '../js/game-buildings.js';
 import { Worker, WorkerManager } from '../js/game-workers.js';
 import { WeatherManager } from '../js/game-weather.js';
 import { GameLoop } from '../js/game-loop.js';
+import { ResearchManager } from '../js/game-research.js';
 
 // ==========================================
 // 测试用例
@@ -201,7 +202,7 @@ describe('BuildingManager - 建筑系统', () => {
   it('getAll 应该返回所有建筑', () => {
     const bm = new BuildingManager();
     const all = bm.getAll();
-    expect(all.length).toBe(7); // 7种建筑
+    expect(all.length).toBe(8); // 8种建筑（含工坊）
   });
 
   it('getUnlocked 应该只返回已解锁建筑', () => {
@@ -518,6 +519,185 @@ describe('点击区域计算', () => {
 
     const hitBtnX = tapX0 >= bx0 && tapX0 <= bx0 + btnW;
     expect(hitBtnX).toBeTruthy();
+  });
+});
+
+describe('ResearchManager - 科技树系统', () => {
+  it('初始状态应该有可用科技', () => {
+    const rm = new ResearchManager();
+    const available = rm.getAvailable();
+    expect(available.length).toBeGreaterThan(0);
+  });
+
+  it('无前置科技应该初始为 AVAILABLE', () => {
+    const rm = new ResearchManager();
+    const lumber = rm.get('TECH_EFFICIENT_LUMBER');
+    expect(lumber.state).toBe(TechState.AVAILABLE);
+  });
+
+  it('有前置科技应该初始为 LOCKED', () => {
+    const rm = new ResearchManager();
+    const advancedCook = rm.get('TECH_ADVANCED_COOK');
+    expect(advancedCook.state).toBe(TechState.LOCKED);
+  });
+
+  it('startResearch 应该在资源足够时成功', () => {
+    const rm = new ResearchManager();
+    const wallet = new WalletManager();
+    const ok = rm.startResearch('TECH_EFFICIENT_LUMBER', wallet);
+    expect(ok).toBeTruthy();
+    const tech = rm.get('TECH_EFFICIENT_LUMBER');
+    expect(tech.state).toBe(TechState.RESEARCHING);
+  });
+
+  it('startResearch 应该在资源不足时失败', () => {
+    const rm = new ResearchManager();
+    const wallet = new WalletManager();
+    wallet.resources[ResourceType.WOOD] = 0;
+    wallet.resources[ResourceType.GEM] = 0;
+    const ok = rm.startResearch('TECH_EFFICIENT_LUMBER', wallet);
+    expect(ok).toBeFalsy();
+  });
+
+  it('startResearch 应该扣除资源', () => {
+    const rm = new ResearchManager();
+    const wallet = new WalletManager();
+    const beforeWood = wallet.get(ResourceType.WOOD);
+    const beforeGem = wallet.get(ResourceType.GEM);
+    rm.startResearch('TECH_EFFICIENT_LUMBER', wallet);
+    expect(wallet.get(ResourceType.WOOD)).toBe(beforeWood - 200);
+    expect(wallet.get(ResourceType.GEM)).toBe(beforeGem - 5);
+  });
+
+  it('tick 应该推进研究进度', () => {
+    const rm = new ResearchManager();
+    const wallet = new WalletManager();
+    const buildings = new BuildingManager();
+    // 工坊需要已建造才能推进研究
+    const workshop = buildings.get(BuildingType.WORKSHOP);
+    workshop.level = 1;
+    workshop.state = BuildingState.NORMAL;
+    rm.startResearch('TECH_EFFICIENT_LUMBER', wallet);
+    const tech = rm.get('TECH_EFFICIENT_LUMBER');
+    tech.durationMs = 2000;
+    tech.progressMs = 1000;
+    rm.tick(wallet, buildings);
+    expect(tech.progressMs).toBe(2000);
+  });
+
+  it('tick 完成后应该变为 DONE', () => {
+    const rm = new ResearchManager();
+    const wallet = new WalletManager();
+    const buildings = new BuildingManager();
+    const workshop = buildings.get(BuildingType.WORKSHOP);
+    workshop.level = 1;
+    workshop.state = BuildingState.NORMAL;
+    rm.startResearch('TECH_EFFICIENT_LUMBER', wallet);
+    const tech = rm.get('TECH_EFFICIENT_LUMBER');
+    tech.durationMs = 1000;
+    tech.progressMs = 999;
+    rm.tick(wallet, buildings);
+    expect(tech.state).toBe(TechState.DONE);
+  });
+
+  it('完成后应该刷新可用科技', () => {
+    const rm = new ResearchManager();
+    const wallet = new WalletManager();
+    const buildings = new BuildingManager();
+    const workshop = buildings.get(BuildingType.WORKSHOP);
+    workshop.level = 1;
+    workshop.state = BuildingState.NORMAL;
+    rm.startResearch('TECH_WORKSHOP', wallet);
+    const tech = rm.get('TECH_WORKSHOP');
+    tech.durationMs = 1;
+    tech.progressMs = 0;
+    rm.tick(wallet, buildings);
+    expect(tech.state).toBe(TechState.DONE);
+    const advCook = rm.get('TECH_ADVANCED_COOK');
+    expect(advCook.state).toBe(TechState.AVAILABLE);
+  });
+
+  it('getOutputMultiplier 无科技时返回 1', () => {
+    const rm = new ResearchManager();
+    expect(rm.getOutputMultiplier(BuildingType.LUMBER_CAMP)).toBe(1);
+  });
+
+  it('getOutputMultiplier 完成后返回加成', () => {
+    const rm = new ResearchManager();
+    const tech = rm.get('TECH_EFFICIENT_LUMBER');
+    tech.state = TechState.DONE;
+    expect(rm.getOutputMultiplier(BuildingType.LUMBER_CAMP)).toBe(1.3);
+  });
+
+  it('getWorkerBuff 无科技时返回 0', () => {
+    const rm = new ResearchManager();
+    expect(rm.getWorkerBuff('COLD_RESIST')).toBe(0);
+  });
+
+  it('getWorkerBuff 完成后返回加成', () => {
+    const rm = new ResearchManager();
+    const tech = rm.get('TECH_INSULATION');
+    tech.state = TechState.DONE;
+    expect(rm.getWorkerBuff('COLD_RESIST')).toBe(0.2);
+  });
+
+  it('serialize/deserialize 应该保持状态', () => {
+    const rm = new ResearchManager();
+    rm.startResearch('TECH_EFFICIENT_LUMBER', new WalletManager());
+    const data = rm.serialize();
+    const rm2 = new ResearchManager();
+    rm2.deserialize(data);
+    expect(rm2.get('TECH_EFFICIENT_LUMBER').state).toBe(TechState.RESEARCHING);
+  });
+
+  it('research.outputMultiplier 应该影响建筑产出', () => {
+    const game = new GameLoop();
+    // 手动完成高效伐木科技
+    game.research.get('TECH_EFFICIENT_LUMBER').state = TechState.DONE;
+    const output = game.getBuildingOutput(BuildingType.LUMBER_CAMP, 1);
+    expect(output.amount).toBe(2.0 * 1.3); // base 2.0 * 1.3 mult
+  });
+});
+
+describe('随机事件系统', () => {
+  it('GameLoop 应该有 eventLog', () => {
+    const game = new GameLoop();
+    expect(game.eventLog).toBeTruthy();
+    expect(game.eventLog.length).toBe(0);
+  });
+
+  it('tickRandomEvents 应该能触发事件', () => {
+    const game = new GameLoop();
+    // 强制触发所有事件
+    const originalRandom = Math.random;
+    Math.random = () => 0.001; // 所有概率都触发
+    game.tickRandomEvents();
+    expect(game.eventLog.length).toBeGreaterThan(0);
+    Math.random = originalRandom;
+  });
+
+  it('ADD_WORKER 事件应该增加工人', () => {
+    const game = new GameLoop();
+    const before = game.workers.workers.length;
+    // 直接调用 tickRandomEvents with forced probability
+    const originalRandom = Math.random;
+    Math.random = () => 0.001;
+    game.tickRandomEvents();
+    Math.random = originalRandom;
+    // 应该至少有一个 ADD_WORKER 事件
+    const addWorkerEvents = game.eventLog.filter(e => e.effect.type === 'ADD_WORKER');
+    if (addWorkerEvents.length > 0) {
+      expect(game.workers.workers.length).toBeGreaterThan(before);
+    }
+  });
+
+  it('TEMP_BOOST 事件应该设置温度加成', () => {
+    const game = new GameLoop();
+    game.activeTempBoost = 10;
+    game.tempBoostTicks = 5;
+    expect(game.activeTempBoost).toBe(10);
+    game.onTick();
+    expect(game.tempBoostTicks).toBe(4);
   });
 });
 
