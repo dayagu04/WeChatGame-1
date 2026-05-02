@@ -81,13 +81,14 @@ function expect(val) {
 }
 
 // --- 导入游戏模块 ---
-import { ResourceType, BuildingType, BuildingState, WorkerState, GAME_CONSTANTS, EXPEDITION_CONFIGS, TechState } from '../js/game-constants.js';
+import { ResourceType, BuildingType, BuildingState, WorkerState, GAME_CONSTANTS, EXPEDITION_CONFIGS, TechState, eventBus } from '../js/game-constants.js';
 import { WalletManager } from '../js/game-wallet.js';
 import { Building, BuildingManager } from '../js/game-buildings.js';
 import { Worker, WorkerManager } from '../js/game-workers.js';
 import { WeatherManager } from '../js/game-weather.js';
 import { GameLoop } from '../js/game-loop.js';
 import { ResearchManager } from '../js/game-research.js';
+import { TradingManager } from '../js/game-trading.js';
 
 // ==========================================
 // 测试用例
@@ -202,7 +203,7 @@ describe('BuildingManager - 建筑系统', () => {
   it('getAll 应该返回所有建筑', () => {
     const bm = new BuildingManager();
     const all = bm.getAll();
-    expect(all.length).toBe(8); // 8种建筑（含工坊）
+    expect(all.length).toBe(9); // 9种建筑
   });
 
   it('getUnlocked 应该只返回已解锁建筑', () => {
@@ -698,6 +699,96 @@ describe('随机事件系统', () => {
     expect(game.activeTempBoost).toBe(10);
     game.onTick();
     expect(game.tempBoostTicks).toBe(4);
+  });
+});
+
+describe('TradingManager - 交易系统', () => {
+  it('初始汇率应该正确', () => {
+    const tm = new TradingManager();
+    expect(tm.rates[ResourceType.WOOD]).toBe(1.0);
+    expect(tm.rates[ResourceType.GEM]).toBe(10.0);
+  });
+
+  it('tickRates 应该波动汇率', () => {
+    const tm = new TradingManager();
+    const before = tm.rates[ResourceType.COAL];
+    tm.tickRates();
+    // 汇率应该变化（大概率）
+    expect(tm.rates[ResourceType.COAL]).toBeGreaterThan(0.5);
+    expect(tm.rates[ResourceType.COAL]).toBeLessThan(5.0);
+  });
+
+  it('executeTrade 应该成功交换资源', () => {
+    const tm = new TradingManager();
+    const wallet = new WalletManager();
+    const beforeWood = wallet.get(ResourceType.WOOD);
+    const beforeCoal = wallet.get(ResourceType.COAL);
+    const ok = tm.executeTrade(wallet, ResourceType.WOOD, 100, ResourceType.COAL);
+    expect(ok).toBeTruthy();
+    expect(wallet.get(ResourceType.WOOD)).toBe(beforeWood - 100);
+    expect(wallet.get(ResourceType.COAL)).toBeGreaterThan(beforeCoal);
+  });
+
+  it('executeTrade 应该在资源不足时失败', () => {
+    const tm = new TradingManager();
+    const wallet = new WalletManager();
+    const ok = tm.executeTrade(wallet, ResourceType.IRON, 9999, ResourceType.WOOD);
+    expect(ok).toBeFalsy();
+  });
+
+  it('executeTrade 不能自己换自己', () => {
+    const tm = new TradingManager();
+    const wallet = new WalletManager();
+    const ok = tm.executeTrade(wallet, ResourceType.WOOD, 100, ResourceType.WOOD);
+    expect(ok).toBeFalsy();
+  });
+
+  it('executeTrade 应该收取手续费', () => {
+    const tm = new TradingManager();
+    const wallet = new WalletManager();
+    tm.rates[ResourceType.WOOD] = 1.0;
+    tm.rates[ResourceType.COAL] = 1.0; // 1:1 汇率
+    const preview = tm.getTradePreview(ResourceType.WOOD, 100, ResourceType.COAL);
+    expect(preview.buyAmount).toBe(90); // 100 * 0.9 = 90 (10% fee)
+  });
+
+  it('getTradePreview 应该返回预览', () => {
+    const tm = new TradingManager();
+    const preview = tm.getTradePreview(ResourceType.WOOD, 100, ResourceType.COAL);
+    expect(preview).toBeTruthy();
+    expect(preview.fee).toBe(0.10);
+    expect(preview.buyAmount).toBeGreaterThan(0);
+  });
+
+  it('商队应该提供折扣', () => {
+    const tm = new TradingManager();
+    tm.caravanActive = true;
+    tm.caravanDiscount = 0.30;
+    const rateWithCaravan = tm.getRate(ResourceType.COAL);
+    const normalRate = tm.rates[ResourceType.COAL];
+    expect(rateWithCaravan).toBeLessThan(normalRate);
+  });
+
+  it('serialize/deserialize 应该保持状态', () => {
+    const tm = new TradingManager();
+    tm.totalTrades = 5;
+    tm.caravanActive = true;
+    const data = tm.serialize();
+    const tm2 = new TradingManager();
+    tm2.deserialize(data);
+    expect(tm2.totalTrades).toBe(5);
+    expect(tm2.caravanActive).toBeTruthy();
+  });
+
+  it('交易应该触发事件', () => {
+    const tm = new TradingManager();
+    const wallet = new WalletManager();
+    let tradeEvent = null;
+    eventBus.on('EVT_TRADE_COMPLETE', (data) => { tradeEvent = data; });
+    tm.executeTrade(wallet, ResourceType.WOOD, 50, ResourceType.COAL);
+    expect(tradeEvent).toBeTruthy();
+    expect(tradeEvent.sellType).toBe(ResourceType.WOOD);
+    eventBus.clear();
   });
 });
 

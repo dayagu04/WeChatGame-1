@@ -9,6 +9,7 @@ import { BuildingManager } from './game-buildings';
 import { WorkerManager } from './game-workers';
 import { WeatherManager } from './game-weather';
 import { ResearchManager } from './game-research';
+import { TradingManager } from './game-trading';
 
 export class GameLoop {
   constructor() {
@@ -17,6 +18,7 @@ export class GameLoop {
     this.workers = new WorkerManager();
     this.weather = new WeatherManager();
     this.research = new ResearchManager();
+    this.trading = new TradingManager();
 
     this.tickCount = 0;
     this.lastSaveTs = Date.now();
@@ -151,8 +153,9 @@ export class GameLoop {
       }
     }
 
-    // Phase 3.5: 研究推进
+    // Phase 3.5: 研究推进 + 交易站
     this.research.tick(this.wallet, this.buildings);
+    this.trading.tick();
 
     // Phase 4: 探索结算
     this.workers.tickExpeditions(this.wallet, this.weather);
@@ -198,6 +201,7 @@ export class GameLoop {
       case BuildingType.CLINIC:
       case BuildingType.SHELTER:
       case BuildingType.WORKSHOP:
+      case BuildingType.TRADING_POST:
         return null;
       default:
         return null;

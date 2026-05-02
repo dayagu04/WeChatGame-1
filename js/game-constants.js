@@ -23,6 +23,7 @@ export const BuildingType = {
   CLINIC: 'BLD_CLINIC',
   SHELTER: 'BLD_SHELTER',
   WORKSHOP: 'BLD_WORKSHOP',
+  TRADING_POST: 'BLD_TRADING_POST',
 };
 
 // ---- 建筑状态 ----
@@ -89,6 +90,9 @@ export const GlobalEvents = {
   RESEARCH_COMPLETE: 'EVT_RESEARCH_COMPLETE',
   TECH_STATE_CHANGE: 'EVT_TECH_STATE_CHANGE',
   RANDOM_EVENT: 'EVT_RANDOM_EVENT',
+  TRADE_COMPLETE: 'EVT_TRADE_COMPLETE',
+  CARAVAN_ARRIVE: 'EVT_CARAVAN_ARRIVE',
+  CARAVAN_DEPART: 'EVT_CARAVAN_DEPART',
 };
 
 // ==========================================

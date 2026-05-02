@@ -41,6 +41,10 @@ const BUILDING_CONFIGS = {
     name: '研究工坊', emoji: '🔬',
     baseCost: 300, costType: ResourceType.WOOD, baseTimeSec: 45, baseSlots: 2,
   },
+  [BuildingType.TRADING_POST]: {
+    name: '交易站', emoji: '🏪',
+    baseCost: 200, costType: ResourceType.WOOD, baseTimeSec: 35, baseSlots: 1,
+  },
 };
 
 function calcUpgradeCost(baseCost, level) {
