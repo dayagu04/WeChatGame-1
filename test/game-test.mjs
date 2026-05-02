@@ -89,6 +89,7 @@ import { WeatherManager } from '../js/game-weather.js';
 import { GameLoop } from '../js/game-loop.js';
 import { ResearchManager } from '../js/game-research.js';
 import { TradingManager } from '../js/game-trading.js';
+import { AchievementManager } from '../js/game-achievements.js';
 
 // ==========================================
 // 测试用例
@@ -843,6 +844,92 @@ describe('日夜循环系统', () => {
     game.dayTicks = 10; // 午夜
     const nightOutput = game.getBuildingOutput(BuildingType.LUMBER_CAMP, 1);
     expect(dayOutput.amount).toBeGreaterThan(nightOutput.amount);
+  });
+});
+
+describe('AchievementManager - 成就系统', () => {
+  it('初始状态应该所有成就未解锁', () => {
+    const am = new AchievementManager();
+    expect(am.getUnlocked().length).toBe(0);
+    expect(am.getLocked().length).toBeGreaterThan(0);
+  });
+
+  it('ACH_DAY_10 应该在 10 天后解锁', () => {
+    const game = new GameLoop();
+    game.tickCount = game.dayLength * 10;
+    game.achievements.tick(game);
+    const ach = game.achievements.get('ACH_DAY_10');
+    expect(ach.unlocked).toBeTruthy();
+  });
+
+  it('ACH_DAY_10 应该发放奖励', () => {
+    const game = new GameLoop();
+    const beforeWood = game.wallet.get(ResourceType.WOOD);
+    game.tickCount = game.dayLength * 10;
+    game.achievements.tick(game);
+    expect(game.wallet.get(ResourceType.WOOD)).toBeGreaterThan(beforeWood);
+  });
+
+  it('ACH_FIRST_BUILD 应该在建造建筑后解锁', () => {
+    const game = new GameLoop();
+    // 初始有火炉+伐木场=2个，需要3个
+    const coal = game.buildings.get(BuildingType.COAL_MINE);
+    coal.level = 1;
+    coal.state = BuildingState.NORMAL;
+    game.achievements.tick(game);
+    const ach = game.achievements.get('ACH_FIRST_BUILD');
+    expect(ach.unlocked).toBeTruthy();
+  });
+
+  it('ACH_RESEARCH_5 应该在完成 5 项科技后解锁', () => {
+    const game = new GameLoop();
+    const techs = game.research.getAll();
+    for (let i = 0; i < 5 && i < techs.length; i++) {
+      techs[i].state = 3; // DONE
+    }
+    game.achievements.tick(game);
+    const ach = game.achievements.get('ACH_RESEARCH_5');
+    expect(ach.unlocked).toBeTruthy();
+  });
+
+  it('ACH_TRADE_10 应该在 10 次交易后解锁', () => {
+    const game = new GameLoop();
+    game.trading.totalTrades = 10;
+    game.achievements.tick(game);
+    const ach = game.achievements.get('ACH_TRADE_10');
+    expect(ach.unlocked).toBeTruthy();
+  });
+
+  it('已解锁成就不应该重复触发', () => {
+    const game = new GameLoop();
+    game.tickCount = game.dayLength * 10;
+    game.achievements.tick(game);
+    const beforeWood = game.wallet.get(ResourceType.WOOD);
+    game.achievements.tick(game); // 再次 tick
+    expect(game.wallet.get(ResourceType.WOOD)).toBe(beforeWood); // 不应重复发放
+  });
+
+  it('serialize/deserialize 应该保持状态', () => {
+    const am = new AchievementManager();
+    const ach = am.get('ACH_DAY_10');
+    ach.unlocked = true;
+    am.unlockCount = 1;
+    const data = am.serialize();
+    const am2 = new AchievementManager();
+    am2.deserialize(data);
+    expect(am2.get('ACH_DAY_10').unlocked).toBeTruthy();
+    expect(am2.unlockCount).toBe(1);
+  });
+
+  it('成就解锁应该触发事件', () => {
+    const game = new GameLoop();
+    let achEvent = null;
+    eventBus.on('EVT_ACHIEVEMENT_UNLOCK', (data) => { achEvent = data; });
+    game.tickCount = game.dayLength * 10;
+    game.achievements.tick(game);
+    expect(achEvent).toBeTruthy();
+    expect(achEvent.achievementId).toBe('ACH_DAY_10');
+    eventBus.clear();
   });
 });
 

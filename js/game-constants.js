@@ -93,6 +93,7 @@ export const GlobalEvents = {
   TRADE_COMPLETE: 'EVT_TRADE_COMPLETE',
   CARAVAN_ARRIVE: 'EVT_CARAVAN_ARRIVE',
   CARAVAN_DEPART: 'EVT_CARAVAN_DEPART',
+  ACHIEVEMENT_UNLOCK: 'EVT_ACHIEVEMENT_UNLOCK',
 };
 
 // ==========================================

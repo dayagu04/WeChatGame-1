@@ -10,6 +10,7 @@ import { WorkerManager } from './game-workers';
 import { WeatherManager } from './game-weather';
 import { ResearchManager } from './game-research';
 import { TradingManager } from './game-trading';
+import { AchievementManager } from './game-achievements';
 
 export class GameLoop {
   constructor() {
@@ -19,6 +20,9 @@ export class GameLoop {
     this.weather = new WeatherManager();
     this.research = new ResearchManager();
     this.trading = new TradingManager();
+    this.achievements = new AchievementManager();
+    this._blizzardSurvived = false;
+    this._prevBlizzardState = 'BLZ_IDLE';
 
     this.tickCount = 0;
     this.lastSaveTs = Date.now();
@@ -166,6 +170,15 @@ export class GameLoop {
 
     // Phase 5: 随机事件
     this.tickRandomEvents();
+
+    // Phase 6: 暴风雪存活追踪
+    if (this._prevBlizzardState === 'BLZ_ACTIVE' && this.weather.blizzardState !== 'BLZ_ACTIVE') {
+      this._blizzardSurvived = true;
+    }
+    this._prevBlizzardState = this.weather.blizzardState;
+
+    // Phase 7: 成就检查
+    this.achievements.tick(this);
 
     this.tickCount++;
     this.dayTicks = (this.dayTicks + 1) % this.dayLength;
