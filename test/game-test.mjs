@@ -697,7 +697,11 @@ describe('随机事件系统', () => {
     game.activeTempBoost = 10;
     game.tempBoostTicks = 5;
     expect(game.activeTempBoost).toBe(10);
+    // 用高随机值避免触发随机事件
+    const origRandom = Math.random;
+    Math.random = () => 0.99;
     game.onTick();
+    Math.random = origRandom;
     expect(game.tempBoostTicks).toBe(4);
   });
 });
@@ -789,6 +793,56 @@ describe('TradingManager - 交易系统', () => {
     expect(tradeEvent).toBeTruthy();
     expect(tradeEvent.sellType).toBe(ResourceType.WOOD);
     eventBus.clear();
+  });
+});
+
+describe('日夜循环系统', () => {
+  it('初始时间应该在正午附近', () => {
+    const game = new GameLoop();
+    const tod = game.getTimeOfDay();
+    expect(tod).toBeGreaterThan(0.4);
+    expect(tod).toBeLessThan(0.6);
+  });
+
+  it('tick 应该推进时间', () => {
+    const game = new GameLoop();
+    const before = game.dayTicks;
+    game.onTick();
+    expect(game.dayTicks).toBe(before + 1);
+  });
+
+  it('时间应该循环', () => {
+    const game = new GameLoop();
+    game.dayTicks = game.dayLength - 1;
+    game.onTick();
+    expect(game.dayTicks).toBe(0);
+  });
+
+  it('白天效率应该是 100%', () => {
+    const game = new GameLoop();
+    game.dayTicks = 60; // 正午
+    expect(game.getWorkerEfficiency()).toBe(1.0);
+  });
+
+  it('夜晚效率应该是 80%', () => {
+    const game = new GameLoop();
+    game.dayTicks = 10; // 午夜附近 (10/120 = 0.083)
+    expect(game.getWorkerEfficiency()).toBe(0.8);
+  });
+
+  it('黎明效率应该是 90%', () => {
+    const game = new GameLoop();
+    game.dayTicks = 28; // 28/120 = 0.233 (黎明)
+    expect(game.getWorkerEfficiency()).toBe(0.9);
+  });
+
+  it('夜晚产量应该降低', () => {
+    const game = new GameLoop();
+    game.dayTicks = 60; // 正午
+    const dayOutput = game.getBuildingOutput(BuildingType.LUMBER_CAMP, 1);
+    game.dayTicks = 10; // 午夜
+    const nightOutput = game.getBuildingOutput(BuildingType.LUMBER_CAMP, 1);
+    expect(dayOutput.amount).toBeGreaterThan(nightOutput.amount);
   });
 });
 

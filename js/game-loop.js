@@ -30,6 +30,10 @@ export class GameLoop {
     this.tempBoostTicks = 0;
     this.eventLog = [];
 
+    // 日夜循环（120 tick = 1天，每tick 1秒）
+    this.dayTicks = 60; // 从正午开始
+    this.dayLength = 120; // 120 tick = 1天
+
     // 初始工人
     for (let i = 0; i < 3; i++) {
       this.workers.addWorker();
@@ -164,6 +168,20 @@ export class GameLoop {
     this.tickRandomEvents();
 
     this.tickCount++;
+    this.dayTicks = (this.dayTicks + 1) % this.dayLength;
+  }
+
+  // 获取当前时间（0~1，0=午夜，0.5=正午）
+  getTimeOfDay() {
+    return this.dayTicks / this.dayLength;
+  }
+
+  // 获取工人效率（白天100%，夜晚80%）
+  getWorkerEfficiency() {
+    const t = this.getTimeOfDay();
+    if (t < 0.2 || t > 0.85) return 0.8; // 夜晚
+    if (t < 0.3 || t > 0.7) return 0.9; // 黎明/黄昏
+    return 1.0; // 白天
   }
 
   // 医疗站治愈逻辑
@@ -185,17 +203,18 @@ export class GameLoop {
 
   getBuildingOutput(type, workerCount) {
     const mult = this.research.getOutputMultiplier(type);
+    const eff = this.getWorkerEfficiency();
     switch (type) {
       case BuildingType.LUMBER_CAMP:
-        return { type: ResourceType.WOOD, amount: 2.0 * workerCount * mult };
+        return { type: ResourceType.WOOD, amount: 2.0 * workerCount * mult * eff };
       case BuildingType.COAL_MINE:
-        return { type: ResourceType.COAL, amount: 1.5 * workerCount * mult };
+        return { type: ResourceType.COAL, amount: 1.5 * workerCount * mult * eff };
       case BuildingType.HUNTER_HUT:
-        return { type: ResourceType.MEAT, amount: 1.0 * workerCount * mult };
+        return { type: ResourceType.MEAT, amount: 1.0 * workerCount * mult * eff };
       case BuildingType.COOKHOUSE:
         if (this.wallet.get(ResourceType.MEAT) >= 1 * workerCount) {
           this.wallet.resources[ResourceType.MEAT] -= 1 * workerCount;
-          return { type: ResourceType.RATION, amount: 0.8 * workerCount * mult };
+          return { type: ResourceType.RATION, amount: 0.8 * workerCount * mult * eff };
         }
         return null;
       case BuildingType.CLINIC:

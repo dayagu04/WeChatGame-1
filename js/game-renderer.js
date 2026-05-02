@@ -90,7 +90,7 @@ export class GameRenderer {
     const warmth = furnaceLv > 0 && furnace.state !== BuildingState.FROZEN ? furnaceLv * 2 : 0;
     const effectiveTemp = temp + warmth;
 
-    drawSky(ctx, this.w, this.h, effectiveTemp);
+    drawSky(ctx, this.w, this.h, effectiveTemp, gameLoop.getTimeOfDay());
 
     // === 2. 远山 ===
     drawMountains(ctx, this.w, groundY);
@@ -289,6 +289,14 @@ export class GameRenderer {
     const w = gameLoop.weather;
     const emoji = WEATHER_EMOJI[w.currentWeather] || '☀️';
 
+    // 日夜时间
+    const tod = gameLoop.getTimeOfDay();
+    const hour = Math.floor(tod * 24);
+    const timeStr = `${String(hour).padStart(2, '0')}:00`;
+    const timeEmoji = (tod < 0.2 || tod > 0.85) ? '🌙' : (tod < 0.3 || tod > 0.7) ? '🌅' : '☀️';
+    const eff = gameLoop.getWorkerEfficiency();
+    const effStr = eff < 1 ? ` 效率${Math.floor(eff * 100)}%` : '';
+
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
     roundRect(ctx, 4, y, this.w - 8, WEATHER_BAR_H, 4);
     ctx.fill();
@@ -297,7 +305,7 @@ export class GameRenderer {
     ctx.fillStyle = effectiveTemp < -30 ? '#ff4444' : effectiveTemp < -10 ? '#ffaa00' : '#44ff44';
     const blizName = BLIZZARD_NAMES[w.blizzardState] || w.blizzardState;
     const warmthStr = warmth > 0 ? ` (+${warmth}🔥)` : '';
-    ctx.fillText(`${emoji} ${effectiveTemp.toFixed(1)}°C${warmthStr}  暴风雪:${blizName}`, 10, y + 18);
+    ctx.fillText(`${emoji}${effectiveTemp.toFixed(1)}°C${warmthStr} ${timeEmoji}${timeStr}${effStr} 暴风雪:${blizName}`, 10, y + 18);
   }
 
   // ---- 底部操作栏 ----

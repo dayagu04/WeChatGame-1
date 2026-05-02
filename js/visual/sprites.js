@@ -606,20 +606,94 @@ function drawDeadWorker(ctx) {
 
 // ---- 地面与背景 ----
 
-export function drawSky(ctx, w, h, temperature) {
-  // 天空渐变 - 温度越低越暗冷
+// 星星缓存（避免每帧重新随机）
+let starCache = null;
+function getStars(w, h) {
+  if (starCache && starCache.w === w && starCache.h === h) return starCache.stars;
+  const stars = [];
+  for (let i = 0; i < 60; i++) {
+    stars.push({
+      x: Math.random() * w,
+      y: Math.random() * h * 0.35,
+      size: 0.5 + Math.random() * 1.5,
+      twinkleSpeed: 1 + Math.random() * 3,
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+  starCache = { w, h, stars };
+  return stars;
+}
+
+export function drawSky(ctx, w, h, temperature, timeOfDay) {
+  const t = timeOfDay || 0.5; // 0=midnight, 0.25=dawn, 0.5=noon, 0.75=dusk
   const cold = Math.min(1, Math.max(0, (-temperature - 10) / 40));
+
+  // 根据时间计算天空颜色
+  let skyR, skyG, skyB;
+  if (t < 0.2 || t > 0.85) {
+    // 夜晚
+    skyR = 8 + cold * 5;
+    skyG = 10 + cold * 3;
+    skyB = 25 - cold * 10;
+  } else if (t < 0.3) {
+    // 黎明
+    const f = (t - 0.2) / 0.1;
+    skyR = lerp(8, 60, f) + cold * 5;
+    skyG = lerp(10, 40, f) + cold * 3;
+    skyB = lerp(25, 80, f) - cold * 10;
+  } else if (t < 0.7) {
+    // 白天
+    const f = t < 0.5 ? (t - 0.3) / 0.2 : (0.7 - t) / 0.2;
+    skyR = lerp(60, 30, 1 - f) + cold * 10;
+    skyG = lerp(40, 50, f) + cold * 5;
+    skyB = lerp(80, 90, f) - cold * 15;
+  } else if (t < 0.85) {
+    // 黄昏
+    const f = (t - 0.7) / 0.15;
+    skyR = lerp(50, 8, f) + cold * 5;
+    skyG = lerp(30, 10, f) + cold * 3;
+    skyB = lerp(60, 25, f) - cold * 10;
+  } else {
+    skyR = 8 + cold * 5;
+    skyG = 10 + cold * 3;
+    skyB = 25 - cold * 10;
+  }
+
   const grad = ctx.createLinearGradient(0, 0, 0, h * 0.4);
-  const r1 = Math.floor(20 + cold * 10);
-  const g1 = Math.floor(30 + cold * 5);
-  const b1 = Math.floor(60 - cold * 20);
-  const r2 = Math.floor(40 + cold * 15);
-  const g2 = Math.floor(50 + cold * 5);
-  const b2 = Math.floor(80 - cold * 30);
-  grad.addColorStop(0, `rgb(${r1},${g1},${b1})`);
-  grad.addColorStop(1, `rgb(${r2},${g2},${b2})`);
+  grad.addColorStop(0, `rgb(${Math.floor(skyR)},${Math.floor(skyG)},${Math.floor(skyB)})`);
+  grad.addColorStop(1, `rgb(${Math.floor(skyR + 15)},${Math.floor(skyG + 15)},${Math.floor(skyB + 20)})`);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h * 0.4);
+
+  // 夜晚星星
+  if (t < 0.22 || t > 0.82) {
+    const stars = getStars(w, h);
+    const now = Date.now() / 1000;
+    ctx.fillStyle = '#fff';
+    for (const s of stars) {
+      const twinkle = 0.3 + 0.7 * Math.abs(Math.sin(now * s.twinkleSpeed + s.phase));
+      ctx.globalAlpha = twinkle * 0.8;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // 黎明/黄昏暖色光晕
+  if ((t > 0.18 && t < 0.32) || (t > 0.68 && t < 0.87)) {
+    const horizonY = h * 0.38;
+    const glowGrad = ctx.createRadialGradient(w / 2, horizonY, 0, w / 2, horizonY, w * 0.6);
+    glowGrad.addColorStop(0, 'rgba(255,120,50,0.15)');
+    glowGrad.addColorStop(0.5, 'rgba(255,80,30,0.05)');
+    glowGrad.addColorStop(1, 'rgba(255,60,20,0)');
+    ctx.fillStyle = glowGrad;
+    ctx.fillRect(0, 0, w, h * 0.5);
+  }
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * Math.max(0, Math.min(1, t));
 }
 
 export function drawMountains(ctx, w, groundY) {
