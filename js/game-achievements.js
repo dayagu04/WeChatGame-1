@@ -68,6 +68,48 @@ export const ACHIEVEMENT_CONFIGS = [
       return all.length > 0 && all.every(t => t.state === 3 /* DONE */);
     },
   },
+  {
+    id: 'ACH_UPGRADE_5',
+    name: '精益求精',
+    description: '将任意建筑升至5级',
+    reward: { [ResourceType.IRON]: 30 },
+    check: (game) => game.buildings.getUnlocked().some(b => b.level >= 5),
+  },
+  {
+    id: 'ACH_RESOURCE_STOCKPILE',
+    name: '未雨绸缪',
+    description: '同时拥有500木材和500煤炭',
+    reward: { [ResourceType.GEM]: 15 },
+    check: (game) => game.wallet.get(ResourceType.WOOD) >= 500 && game.wallet.get(ResourceType.COAL) >= 500,
+  },
+  {
+    id: 'ACH_MORALE_90',
+    name: '众志成城',
+    description: '营地士气达到90',
+    reward: { [ResourceType.RATION]: 50 },
+    check: (game) => game.campMorale >= 90,
+  },
+  {
+    id: 'ACH_DAY_30',
+    name: '月度 survivor',
+    description: '存活30天',
+    reward: { [ResourceType.GEM]: 30 },
+    check: (game) => game.tickCount >= game.dayLength * 30,
+  },
+  {
+    id: 'ACH_SPEED_3X',
+    name: '快节奏',
+    description: '使用3倍速游戏',
+    reward: { [ResourceType.WOOD]: 100 },
+    check: (game) => game.gameSpeed === 3,
+  },
+  {
+    id: 'ACH_ALL_WORKERS_ALIVE',
+    name: '零伤亡',
+    description: '保持10名工人全部存活',
+    reward: { [ResourceType.MEAT]: 200 },
+    check: (game) => game.workers.getAlive().length >= 10 && game.workers.workers.filter(w => w.state === 'WRK_DEAD').length === 0,
+  },
 ];
 
 export class AchievementManager {
