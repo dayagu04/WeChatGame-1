@@ -1104,6 +1104,18 @@ export class GameRenderer {
       ty += 16;
     }
 
+    // 产出率（如果有工人且在生产）
+    if (b.isUnlocked() && b.assignedWorkers.length > 0 && (b.state === BuildingState.PRODUCING || b.state === BuildingState.NORMAL)) {
+      const output = gameLoop.getBuildingOutput(b.type, b.assignedWorkers.length);
+      if (output) {
+        const emoji = RES_EMOJI[output.type] || '';
+        ctx.fillStyle = '#4ecdc4';
+        ctx.font = '10px monospace';
+        ctx.fillText(`产出: ${output.amount.toFixed(1)}/秒 ${emoji}`, px + 10, ty);
+        ty += 14;
+      }
+    }
+
     // 升级进度
     if (b.state === BuildingState.UPGRADING) {
       const elapsed = Date.now() - b.upgradeStartTimeMs;
