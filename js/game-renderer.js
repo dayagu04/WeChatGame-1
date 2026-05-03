@@ -85,6 +85,17 @@ export class GameRenderer {
     // 浮动文字队列
     this.floatingTexts = [];
     this.floatingDuration = 2000; // 2秒
+
+    // 新手教程
+    this.tutorialStep = 0;
+    this.tutorialVisible = true;
+    this.tutorialSteps = [
+      { text: '欢迎来到无尽冬日！\n这是末日冰雪世界，你需要管理资源和工人', highlight: null },
+      { text: '点击底部按钮可以升级建筑\n分配工人来生产资源', highlight: 'bottom' },
+      { text: '拖拽屏幕可以移动视角\n探索整个营地', highlight: null },
+      { text: '注意天气预报！\n暴风雪会带来严寒和煤炭消耗', highlight: 'weather' },
+      { text: '保持工人健康和饱食\n营地士气影响生产效率', highlight: 'camp' },
+    ];
   }
 
   render(gameLoop) {
@@ -186,6 +197,9 @@ export class GameRenderer {
 
     // === 13. 浮动文字 ===
     this.drawFloatingTexts(cam);
+
+    // === 14. 新手教程 ===
+    this.drawTutorial();
   }
 
   // 添加通知
@@ -270,6 +284,87 @@ export class GameRenderer {
       ctx.textAlign = 'left';
       ctx.globalAlpha = 1;
     }
+  }
+
+  // ---- 新手教程 ----
+  drawTutorial() {
+    if (!this.tutorialVisible || this.tutorialStep >= this.tutorialSteps.length) return;
+
+    const ctx = this.ctx;
+    const step = this.tutorialSteps[this.tutorialStep];
+    const t = this.animTime;
+
+    // 半透明背景遮罩
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, this.w, this.h);
+
+    // 教程卡片
+    const cardW = Math.min(320, this.w - 40);
+    const cardH = 120;
+    const cardX = (this.w - cardW) / 2;
+    const cardY = (this.h - cardH) / 2;
+
+    // 卡片背景
+    ctx.fillStyle = 'rgba(20,30,50,0.95)';
+    roundRect(ctx, cardX, cardY, cardW, cardH, 12);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(100,150,200,0.5)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, cardX, cardY, cardW, cardH, 12);
+    ctx.stroke();
+
+    // 步骤指示器
+    const dotsY = cardY + 15;
+    const dotSpacing = 16;
+    const dotsStartX = (this.w - (this.tutorialSteps.length - 1) * dotSpacing) / 2;
+    for (let i = 0; i < this.tutorialSteps.length; i++) {
+      ctx.fillStyle = i === this.tutorialStep ? '#4ecdc4' : 'rgba(100,150,200,0.4)';
+      ctx.beginPath();
+      ctx.arc(dotsStartX + i * dotSpacing, dotsY, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 教程文字
+    ctx.fillStyle = '#e0e8f0';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    const lines = step.text.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], this.w / 2, cardY + 50 + i * 22);
+    }
+
+    // 继续按钮
+    const btnW = 100;
+    const btnH = 30;
+    const btnX = (this.w - btnW) / 2;
+    const btnY = cardY + cardH - 40;
+    const pulse = Math.sin(t * 3) * 0.1 + 0.9;
+    ctx.fillStyle = `rgba(78,205,196,${pulse})`;
+    roundRect(ctx, btnX, btnY, btnW, btnH, 6);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText(this.tutorialStep < this.tutorialSteps.length - 1 ? '继续' : '开始游戏', this.w / 2, btnY + 20);
+
+    ctx.textAlign = 'left';
+
+    // 保存按钮区域供点击检测
+    this._tutorialBtn = { x: btnX, y: btnY, w: btnW, h: btnH };
+  }
+
+  handleTutorialTap(x, y) {
+    if (!this.tutorialVisible || !this._tutorialBtn) return false;
+    const btn = this._tutorialBtn;
+    if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
+      this.tutorialStep++;
+      if (this.tutorialStep >= this.tutorialSteps.length) {
+        this.tutorialVisible = false;
+        // 通知教程完成
+        if (this.onTutorialComplete) this.onTutorialComplete();
+      }
+      return true;
+    }
+    return false;
   }
 
   // ---- 世界环境效果 ----
@@ -457,7 +552,16 @@ export class GameRenderer {
     ctx.fillStyle = effectiveTemp < -30 ? '#ff4444' : effectiveTemp < -10 ? '#ffaa00' : '#44ff44';
     const blizName = BLIZZARD_NAMES[w.blizzardState] || w.blizzardState;
     const warmthStr = warmth > 0 ? ` (+${warmth}🔥)` : '';
-    ctx.fillText(`${emoji}${effectiveTemp.toFixed(1)}°C${warmthStr} ${timeEmoji}${timeStr}${effStr} 暴风雪:${blizName}`, 10, y + 18);
+
+    // 天气预报
+    const forecast = w.getForecast();
+    let forecastStr = '';
+    if (w.blizzardState === 'BLZ_IDLE' && forecast.nextBlizzardIn > 0) {
+      const min = Math.ceil(forecast.nextBlizzardIn / 60000);
+      forecastStr = ` 📢预计${min}分钟后暴风雪(${forecast.severityName})`;
+    }
+
+    ctx.fillText(`${emoji}${effectiveTemp.toFixed(1)}°C${warmthStr} ${timeEmoji}${timeStr}${effStr} 暴风雪:${blizName}${forecastStr}`, 10, y + 18);
   }
 
   // ---- HUD: 底部操作栏 ----

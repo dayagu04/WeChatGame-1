@@ -36,7 +36,18 @@ export default class GameMain {
     const loaded = this.persistence.load();
     if (loaded) {
       console.log('[EndlessWinter] Save data loaded');
+      // 如果已完成教程，隐藏教程
+      if (this.persistence._tutorialCompleted) {
+        this.renderer.tutorialVisible = false;
+      }
     }
+
+    // 教程完成回调
+    this.renderer.onTutorialComplete = () => {
+      this.persistence.markTutorialCompleted();
+      this.persistence.save();
+      console.log('[Tutorial] Completed');
+    };
 
     // 启动
     this.game.start();
@@ -157,6 +168,9 @@ export default class GameMain {
     const r = this.renderer;
     const cam = r.camera;
     const L = HUD;
+
+    // 0. 检查新手教程点击
+    if (r.handleTutorialTap(x, y)) return;
 
     // 1. 检查底部按钮点击（屏幕空间，优先级最高）
     const btnY = this.h - L.BOTTOM_BAR_H;

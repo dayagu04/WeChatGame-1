@@ -96,6 +96,50 @@ export class WeatherManager {
     }
   }
 
+  // 天气预报：返回下一次暴风雪的信息
+  getForecast() {
+    if (this.blizzardState === BlizzardState.IDLE) {
+      const elapsed = Date.now() - this.lastEndTimeMs;
+      const remaining = Math.max(0, this.blizzardIntervalMs - elapsed);
+      const cfg = this.getConfig();
+      return {
+        nextBlizzardIn: remaining,
+        severity: cfg.idx,
+        severityName: ['弱', '中', '强'][Math.min(cfg.idx - 1, 2)],
+        tempDrop: cfg.tempDrop,
+        coalMult: cfg.coalMult,
+        activeDuration: cfg.activeSec * 1000,
+      };
+    }
+
+    if (this.blizzardState === BlizzardState.WARNING) {
+      const cfg = this.getConfig();
+      return {
+        warningTimeLeft: this.blizzardTimerMs,
+        severity: cfg.idx,
+        severityName: ['弱', '中', '强'][Math.min(cfg.idx - 1, 2)],
+        tempDrop: cfg.tempDrop,
+        coalMult: cfg.coalMult,
+        activeDuration: cfg.activeSec * 1000,
+      };
+    }
+
+    if (this.blizzardState === BlizzardState.ACTIVE) {
+      return {
+        activeTimeLeft: this.blizzardTimerMs,
+        severity: this.getConfig().idx,
+        severityName: ['弱', '中', '强'][Math.min(this.getConfig().idx - 1, 2)],
+        tempDrop: this.tempModifier,
+        coalMult: this.coalMultiplier,
+      };
+    }
+
+    // RECOVERY
+    return {
+      recoveryTimeLeft: this.blizzardTimerMs,
+    };
+  }
+
   serialize() {
     return {
       currentWeather: this.currentWeather,

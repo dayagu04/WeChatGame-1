@@ -43,6 +43,7 @@ export class PersistenceManager {
       activeTempBoost: game.activeTempBoost,
       tempBoostTicks: game.tempBoostTicks,
       blizzardSurvived: game._blizzardSurvived,
+      tutorialCompleted: this._tutorialCompleted || false,
 
       wallet: game.wallet.serialize(),
       workers: this.serializeWorkers(),
@@ -140,6 +141,7 @@ export class PersistenceManager {
     game.activeTempBoost = data.activeTempBoost || 0;
     game.tempBoostTicks = data.tempBoostTicks || 0;
     game._blizzardSurvived = data.blizzardSurvived || false;
+    this._tutorialCompleted = data.tutorialCompleted || false;
 
     // 钱包
     if (data.wallet) game.wallet.deserialize(data.wallet);
@@ -180,6 +182,11 @@ export class PersistenceManager {
 
     // 成就
     if (data.achievements) game.achievements.deserialize(data.achievements);
+  }
+
+  // 标记教程完成
+  markTutorialCompleted() {
+    this._tutorialCompleted = true;
   }
 
   // 删除存档
