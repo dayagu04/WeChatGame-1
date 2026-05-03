@@ -690,6 +690,33 @@ export function drawSky(ctx, w, h, temperature, timeOfDay) {
     ctx.fillStyle = glowGrad;
     ctx.fillRect(0, 0, w, h * 0.5);
   }
+
+  // 云朵（白天和黄昏可见）
+  if (t > 0.2 && t < 0.88) {
+    const cloudAlpha = t < 0.3 ? (t - 0.2) / 0.1 : t > 0.75 ? (0.88 - t) / 0.13 : 1;
+    const cloudBright = t > 0.7 ? 0.4 : 0.6; // 黄昏云更暗
+    ctx.fillStyle = `rgba(200,210,220,${cloudAlpha * cloudBright * 0.3})`;
+    const now = Date.now() / 1000;
+    const clouds = [
+      { x: 0.1, y: 0.08, w: 80, h: 20 },
+      { x: 0.35, y: 0.12, w: 100, h: 25 },
+      { x: 0.6, y: 0.06, w: 70, h: 18 },
+      { x: 0.8, y: 0.15, w: 90, h: 22 },
+    ];
+    for (const c of clouds) {
+      const drift = (now * 2 + c.x * 100) % (w + 200) - 100;
+      const cx = (c.x * w + drift) % (w + 200) - 100;
+      ctx.beginPath();
+      ctx.ellipse(cx, h * c.y, c.w, c.h, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx - c.w * 0.3, h * c.y + 4, c.w * 0.6, c.h * 0.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + c.w * 0.35, h * c.y + 3, c.w * 0.5, c.h * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 }
 
 function lerp(a, b, t) {
@@ -769,53 +796,113 @@ export function drawExpeditionBar(ctx, x, y, w, pct, name) {
 
 // 世界地面渲染（相机空间）
 export function drawWorldGround(ctx, camX, camY, screenW, screenH, worldH, horizonY) {
-  // 地面渐变（从地平线向下）
+  // 地面渐变（从地平线向下，带微妙的蓝色调）
   const grad = ctx.createLinearGradient(0, horizonY, 0, screenH);
-  grad.addColorStop(0, '#c8cad0');
-  grad.addColorStop(0.15, '#d8dae0');
-  grad.addColorStop(0.5, '#e0e2e8');
-  grad.addColorStop(1, '#d0d2d8');
+  grad.addColorStop(0, '#b8bcc5');
+  grad.addColorStop(0.1, '#c8ccd5');
+  grad.addColorStop(0.3, '#d5d8e0');
+  grad.addColorStop(0.6, '#dde0e6');
+  grad.addColorStop(1, '#d0d3da');
   ctx.fillStyle = grad;
   ctx.fillRect(0, horizonY, screenW, screenH - horizonY);
 
-  // 雪地纹理点
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
-  for (let i = 0; i < 40; i++) {
+  // 地平线雾气
+  const fogGrad = ctx.createLinearGradient(0, horizonY, 0, horizonY + 30);
+  fogGrad.addColorStop(0, 'rgba(180,190,210,0.4)');
+  fogGrad.addColorStop(1, 'rgba(180,190,210,0)');
+  ctx.fillStyle = fogGrad;
+  ctx.fillRect(0, horizonY, screenW, 30);
+
+  // 雪堆（较大的白色隆起）
+  ctx.fillStyle = 'rgba(240,243,248,0.5)';
+  const drifts = [
+    [200, 580, 40, 6], [500, 620, 50, 8], [800, 590, 35, 5],
+    [1100, 640, 45, 7], [1400, 600, 55, 9], [1700, 630, 40, 6],
+    [2000, 610, 48, 7], [300, 550, 30, 4], [950, 560, 38, 5],
+    [1550, 570, 42, 6], [1850, 600, 35, 5], [2200, 650, 50, 8],
+  ];
+  for (const [dx, dy, dw, dh] of drifts) {
+    const sx = dx - camX;
+    const sy = dy - camY;
+    if (sx < -60 || sx > screenW + 60 || sy < horizonY - 10 || sy > screenH + 10) continue;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, dw, dh, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 雪堆高光
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(sx - dw * 0.1, sy - dh * 0.3, dw * 0.7, dh * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(240,243,248,0.5)';
+  }
+
+  // 雪地纹理点（散落的雪斑）
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  for (let i = 0; i < 50; i++) {
     const wx = (i * 67 + 23) % 2400;
     const wy = (i * 43 + 17) % (worldH - horizonY) + horizonY;
     const sx = wx - camX;
     const sy = wy - camY;
     if (sx < -20 || sx > screenW + 20 || sy < horizonY || sy > screenH + 20) continue;
     ctx.beginPath();
-    ctx.ellipse(sx, sy, 6 + (i % 5) * 2, 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(sx, sy, 5 + (i % 5) * 2, 1.5, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // 路径（连接建筑的雪地小路）
-  ctx.strokeStyle = 'rgba(180,180,190,0.4)';
-  ctx.lineWidth = 12;
+  // 路径（连接建筑的雪地小路，带阴影）
+  const paths = [
+    [[600, 580], [900, 600]],
+    [[900, 600], [1100, 650]],
+    [[1200, 560], [1500, 620]],
+    [[1500, 620], [1700, 590]],
+    [[1200, 560], [1400, 680]],
+    [[1700, 590], [1900, 640]],
+    [[1900, 640], [2100, 610]],
+    [[2100, 610], [2200, 660]],
+  ];
+  // 路径阴影
+  ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+  ctx.lineWidth = 14;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  const paths = [
-    [[600, 580], [900, 600]],   // 火炉→伐木场
-    [[900, 600], [1100, 650]],  // 伐木场→煤矿
-    [[1200, 560], [1500, 620]], // 火炉→猎人小屋
-    [[1500, 620], [1700, 590]], // 猎人小屋→厨房
-    [[1200, 560], [1400, 680]], // 火炉→庇护所
-    [[1700, 590], [1900, 640]], // 厨房→医疗站
-    [[1900, 640], [2100, 610]], // 医疗站→研究工坊
-    [[2100, 610], [2200, 660]], // 研究工坊→交易站
-  ];
   for (const [p1, p2] of paths) {
-    const s1x = p1[0] - camX, s1y = p1[1] - camY;
-    const s2x = p2[0] - camX, s2y = p2[1] - camY;
-    // 只画在屏幕范围内的路径
+    const s1x = p1[0] - camX, s1y = p1[1] - camY + 2;
+    const s2x = p2[0] - camX, s2y = p2[1] - camY + 2;
     if (Math.max(s1x, s2x) < -50 || Math.min(s1x, s2x) > screenW + 50) continue;
     if (Math.max(s1y, s2y) < -50 || Math.min(s1y, s2y) > screenH + 50) continue;
     ctx.beginPath();
     ctx.moveTo(s1x, s1y);
     ctx.lineTo(s2x, s2y);
     ctx.stroke();
+  }
+  // 路径本体
+  ctx.strokeStyle = 'rgba(200,205,215,0.5)';
+  ctx.lineWidth = 10;
+  for (const [p1, p2] of paths) {
+    const s1x = p1[0] - camX, s1y = p1[1] - camY;
+    const s2x = p2[0] - camX, s2y = p2[1] - camY;
+    if (Math.max(s1x, s2x) < -50 || Math.min(s1x, s2x) > screenW + 50) continue;
+    if (Math.max(s1y, s2y) < -50 || Math.min(s1y, s2y) > screenH + 50) continue;
+    ctx.beginPath();
+    ctx.moveTo(s1x, s1y);
+    ctx.lineTo(s2x, s2y);
+    ctx.stroke();
+  }
+  // 路径脚印痕迹
+  ctx.fillStyle = 'rgba(170,175,185,0.25)';
+  for (const [p1, p2] of paths) {
+    const dx = p2[0] - p1[0], dy = p2[1] - p1[1];
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const steps = Math.floor(len / 25);
+    for (let s = 0; s < steps; s++) {
+      const t = (s + 0.5) / steps;
+      const fx = p1[0] + dx * t - camX;
+      const fy = p1[1] + dy * t - camY;
+      if (fx < -10 || fx > screenW + 10 || fy < horizonY || fy > screenH + 10) continue;
+      ctx.beginPath();
+      ctx.ellipse(fx + (s % 2 ? 3 : -3), fy, 3, 1.5, (s * 0.5), 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   ctx.lineCap = 'butt';
 }
@@ -847,36 +934,76 @@ export function drawWorldTrees(ctx, camX, camY, screenW, screenH) {
   for (const t of trees) {
     const sx = t.x - camX;
     const sy = t.y - camY;
-    if (sx < -40 || sx > screenW + 40 || sy < -60 || sy > screenH + 20) continue;
+    if (sx < -50 || sx > screenW + 50 || sy < -80 || sy > screenH + 20) continue;
 
-    // 树干
-    ctx.fillStyle = '#5a3a1a';
-    ctx.fillRect(sx - 2, sy - t.height, 4, t.height * 0.4);
-
-    // 树冠（三角形，带雪）
-    ctx.fillStyle = '#2a5a2a';
+    // 树影
+    ctx.fillStyle = 'rgba(0,0,0,0.08)';
     ctx.beginPath();
-    ctx.moveTo(sx, sy - t.height);
-    ctx.lineTo(sx - t.width / 2, sy - t.height * 0.3);
-    ctx.lineTo(sx + t.width / 2, sy - t.height * 0.3);
-    ctx.closePath();
+    ctx.ellipse(sx + 5, sy + 2, t.width * 0.4, 3, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 雪顶
-    ctx.fillStyle = `rgba(220,230,240,${t.snow})`;
+    // 树干
+    ctx.fillStyle = '#4a2a10';
+    ctx.fillRect(sx - 2, sy - t.height * 0.35, 4, t.height * 0.35);
+    // 树干纹理
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 0.5;
     ctx.beginPath();
-    ctx.moveTo(sx, sy - t.height);
-    ctx.lineTo(sx - t.width * 0.3, sy - t.height * 0.6);
-    ctx.lineTo(sx + t.width * 0.3, sy - t.height * 0.6);
+    ctx.moveTo(sx - 1, sy - t.height * 0.2);
+    ctx.lineTo(sx + 1, sy - t.height * 0.2);
+    ctx.moveTo(sx - 1, sy - t.height * 0.1);
+    ctx.lineTo(sx + 1, sy - t.height * 0.1);
+    ctx.stroke();
+
+    // 第三层树冠（最底层，最宽）
+    ctx.fillStyle = '#1a4a1a';
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - t.height * 0.65);
+    ctx.lineTo(sx - t.width * 0.65, sy - t.height * 0.1);
+    ctx.lineTo(sx + t.width * 0.65, sy - t.height * 0.1);
     ctx.closePath();
     ctx.fill();
 
     // 第二层树冠
-    ctx.fillStyle = '#1a4a1a';
+    ctx.fillStyle = '#245524';
     ctx.beginPath();
-    ctx.moveTo(sx, sy - t.height * 0.7);
-    ctx.lineTo(sx - t.width * 0.6, sy - t.height * 0.15);
-    ctx.lineTo(sx + t.width * 0.6, sy - t.height * 0.15);
+    ctx.moveTo(sx, sy - t.height * 0.8);
+    ctx.lineTo(sx - t.width * 0.5, sy - t.height * 0.35);
+    ctx.lineTo(sx + t.width * 0.5, sy - t.height * 0.35);
+    ctx.closePath();
+    ctx.fill();
+
+    // 第一层树冠（最顶层）
+    ctx.fillStyle = '#2a5a2a';
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - t.height);
+    ctx.lineTo(sx - t.width * 0.35, sy - t.height * 0.55);
+    ctx.lineTo(sx + t.width * 0.35, sy - t.height * 0.55);
+    ctx.closePath();
+    ctx.fill();
+
+    // 雪顶（每层树冠都有雪）
+    ctx.fillStyle = `rgba(225,235,245,${t.snow})`;
+    // 顶层雪
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - t.height);
+    ctx.lineTo(sx - t.width * 0.2, sy - t.height * 0.7);
+    ctx.lineTo(sx + t.width * 0.2, sy - t.height * 0.7);
+    ctx.closePath();
+    ctx.fill();
+    // 中层雪
+    ctx.beginPath();
+    ctx.moveTo(sx - t.width * 0.1, sy - t.height * 0.75);
+    ctx.lineTo(sx - t.width * 0.35, sy - t.height * 0.55);
+    ctx.lineTo(sx + t.width * 0.15, sy - t.height * 0.55);
+    ctx.closePath();
+    ctx.fill();
+    // 底层雪
+    ctx.fillStyle = `rgba(225,235,245,${t.snow * 0.7})`;
+    ctx.beginPath();
+    ctx.moveTo(sx - t.width * 0.15, sy - t.height * 0.6);
+    ctx.lineTo(sx - t.width * 0.5, sy - t.height * 0.35);
+    ctx.lineTo(sx + t.width * 0.05, sy - t.height * 0.35);
     ctx.closePath();
     ctx.fill();
   }
