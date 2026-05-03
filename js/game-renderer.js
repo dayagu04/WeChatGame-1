@@ -599,6 +599,37 @@ export class GameRenderer {
       if (screenPos.y < -30 || screenPos.y > this.h + 30) continue;
 
       drawWorldWorker(ctx, w, screenPos.x, screenPos.y, targetX, targetY);
+
+      // 情绪指示器（头顶显示）
+      if (w.state === WorkerState.SICK) {
+        // 生病：红色感叹号
+        ctx.fillStyle = '#ff4444';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🤒', screenPos.x, screenPos.y - 25);
+        ctx.textAlign = 'left';
+      } else if (w.hunger < 20) {
+        // 饥饿：食物图标
+        ctx.fillStyle = '#ffaa00';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🍽️', screenPos.x, screenPos.y - 25);
+        ctx.textAlign = 'left';
+      } else if (w.health < 30) {
+        // 受伤：急救图标
+        ctx.fillStyle = '#ff6666';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🩹', screenPos.x, screenPos.y - 25);
+        ctx.textAlign = 'left';
+      } else if (w.mood < 30) {
+        // 不开心：悲伤表情
+        ctx.fillStyle = '#888';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('😟', screenPos.x, screenPos.y - 25);
+        ctx.textAlign = 'left';
+      }
     }
   }
 
