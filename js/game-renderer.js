@@ -159,11 +159,8 @@ export class GameRenderer {
     const timeOfDay = gameLoop.getTimeOfDay();
     this.drawDayNightOverlay(ctx, timeOfDay, gameLoop);
 
-    // === 9. 暴风雪遮罩 ===
-    if (gameLoop.weather.blizzardState === 'BLZ_ACTIVE') {
-      ctx.fillStyle = 'rgba(200,210,230,0.1)';
-      ctx.fillRect(0, 0, this.w, this.h);
-    }
+    // === 9. 暴风雪效果 ===
+    this.drawBlizzardEffects(ctx, gameLoop.weather);
 
     // === 9. HUD ===
     this.drawResourceBar(gameLoop);
@@ -669,6 +666,95 @@ export class GameRenderer {
       grad.addColorStop(1, 'rgba(255,200,100,0)');
       ctx.fillStyle = grad;
       ctx.fillRect(sp.x - pos.w * 0.3, sp.y - pos.h * 0.3, pos.w * 1.6, pos.h * 1.6);
+    }
+  }
+
+  // ---- 暴风雪视觉效果 ----
+  drawBlizzardEffects(ctx, weather) {
+    const state = weather.blizzardState;
+    if (state === 'BLZ_IDLE') return;
+
+    const t = this.animTime;
+    const w = this.w;
+    const h = this.h;
+
+    if (state === 'BLZ_WARNING') {
+      // 预警：天空闪红 + 警告文字
+      const pulse = Math.sin(t * 3) * 0.5 + 0.5;
+      ctx.fillStyle = `rgba(255,50,50,${0.03 + pulse * 0.04})`;
+      ctx.fillRect(0, 0, w, h);
+
+      // 闪烁警告图标
+      if (Math.sin(t * 4) > 0) {
+        ctx.save();
+        ctx.font = 'bold 28px sans-serif';
+        ctx.fillStyle = `rgba(255,80,80,${0.6 + pulse * 0.3})`;
+        ctx.textAlign = 'center';
+        ctx.fillText('⚠ 暴风雪预警', w / 2, 100);
+        ctx.restore();
+      }
+      return;
+    }
+
+    if (state === 'BLZ_ACTIVE') {
+      // 暴风雪肆虐：屏幕边缘霜冻 + 风雪线 + 能见度降低
+
+      // 1. 整体白色薄雾
+      ctx.fillStyle = 'rgba(200,210,230,0.12)';
+      ctx.fillRect(0, 0, w, h);
+
+      // 2. 屏幕边缘霜冻效果
+      const frostSize = 60;
+      // 左边
+      let grad = ctx.createLinearGradient(0, 0, frostSize, 0);
+      grad.addColorStop(0, 'rgba(180,200,230,0.25)');
+      grad.addColorStop(1, 'rgba(180,200,230,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, frostSize, h);
+      // 右边
+      grad = ctx.createLinearGradient(w, 0, w - frostSize, 0);
+      grad.addColorStop(0, 'rgba(180,200,230,0.25)');
+      grad.addColorStop(1, 'rgba(180,200,230,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(w - frostSize, 0, frostSize, h);
+      // 上边
+      grad = ctx.createLinearGradient(0, 0, 0, frostSize);
+      grad.addColorStop(0, 'rgba(180,200,230,0.2)');
+      grad.addColorStop(1, 'rgba(180,200,230,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, frostSize);
+
+      // 3. 风雪线条（水平吹过屏幕）
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 12; i++) {
+        const seed = i * 137.5;
+        const lineX = ((t * 200 + seed) % (w + 200)) - 100;
+        const lineY = (seed * 3.7) % h;
+        const lineLen = 30 + Math.sin(seed) * 20;
+        ctx.beginPath();
+        ctx.moveTo(lineX, lineY);
+        ctx.lineTo(lineX - lineLen, lineY + lineLen * 0.15);
+        ctx.stroke();
+      }
+
+      // 4. 暴风雪持续时间提示
+      if (weather.blizzardTimerMs > 0) {
+        const sec = Math.ceil(weather.blizzardTimerMs / 1000);
+        ctx.save();
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillStyle = 'rgba(200,220,255,0.7)';
+        ctx.textAlign = 'center';
+        ctx.fillText(`🌪 暴风雪肆虐中... ${sec}s`, w / 2, 105);
+        ctx.restore();
+      }
+    }
+
+    if (state === 'BLZ_RECOVERY') {
+      // 消退：逐渐变淡的薄雾
+      const fade = Math.max(0, weather.blizzardTimerMs / 120000);
+      ctx.fillStyle = `rgba(200,210,230,${fade * 0.08})`;
+      ctx.fillRect(0, 0, w, h);
     }
   }
 

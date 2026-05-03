@@ -196,6 +196,9 @@ export class GameLoop {
     this.research.tick(this.wallet, this.buildings);
     this.trading.tick();
 
+    // Phase 3.6: 资源衰减（食物腐烂）
+    this.tickResourceDecay();
+
     // Phase 4: 探索结算
     this.workers.tickExpeditions(this.wallet, this.weather);
 
@@ -269,6 +272,40 @@ export class GameLoop {
     if (this.campMorale >= 80) return 1.0 + (this.campMorale - 80) * 0.01; // 1.0 ~ 1.2
     if (this.campMorale >= 40) return 0.7 + (this.campMorale - 40) * 0.0075; // 0.7 ~ 1.0
     return 0.5 + (this.campMorale - 20) * 0.01; // 0.5 ~ 0.7
+  }
+
+  // 资源衰减系统（食物腐烂、寒冷加速消耗）
+  tickResourceDecay() {
+    // 每 100 tick 检查一次衰减
+    if (this.tickCount % 100 !== 0) return;
+
+    const effectiveTemp = this.weather.getGlobalTemperature() +
+      (this.buildings.get(BuildingType.FURNACE).isUnlocked() ? this.buildings.get(BuildingType.FURNACE).level * 2 : 0);
+
+    // 肉类腐烂（温暖时更快）
+    const meat = this.wallet.get(ResourceType.MEAT);
+    if (meat > 0) {
+      const decayRate = effectiveTemp > -10 ? 0.05 : 0.02; // 温暖时5%，寒冷时2%
+      const decay = Math.max(1, Math.floor(meat * decayRate));
+      this.wallet.resources[ResourceType.MEAT] = Math.max(0, meat - decay);
+      if (decay > 0) {
+        eventBus.emit(GlobalEvents.RESOURCE_DECAY, {
+          resourceType: ResourceType.MEAT, amount: decay,
+        });
+      }
+    }
+
+    // 口粮缓慢消耗（每100 tick消耗1%）
+    const ration = this.wallet.get(ResourceType.RATION);
+    if (ration > 5) {
+      const decay = Math.max(1, Math.floor(ration * 0.01));
+      this.wallet.resources[ResourceType.RATION] = Math.max(0, ration - decay);
+      if (decay > 0) {
+        eventBus.emit(GlobalEvents.RESOURCE_DECAY, {
+          resourceType: ResourceType.RATION, amount: decay,
+        });
+      }
+    }
   }
 
   // 医疗站治愈逻辑

@@ -761,6 +761,42 @@ describe('ResearchManager - 科技树系统', () => {
   });
 });
 
+describe('资源衰减系统', () => {
+  it('tickResourceDecay 应该存在', () => {
+    const game = new GameLoop();
+    expect(typeof game.tickResourceDecay).toBe('function');
+  });
+
+  it('肉类应该在温暖时衰减', () => {
+    const game = new GameLoop();
+    game.wallet.add(ResourceType.MEAT, 100);
+    game.tickCount = 100; // 触发衰减检查
+    const before = game.wallet.get(ResourceType.MEAT);
+    game.tickResourceDecay();
+    const after = game.wallet.get(ResourceType.MEAT);
+    expect(after).toBeLessThan(before);
+  });
+
+  it('口粮应该缓慢衰减', () => {
+    const game = new GameLoop();
+    game.wallet.add(ResourceType.RATION, 100);
+    game.tickCount = 100;
+    const before = game.wallet.get(ResourceType.RATION);
+    game.tickResourceDecay();
+    const after = game.wallet.get(ResourceType.RATION);
+    expect(after).toBeLessThan(before);
+  });
+
+  it('非100 tick倍数时不衰减', () => {
+    const game = new GameLoop();
+    game.wallet.add(ResourceType.MEAT, 100);
+    game.tickCount = 50; // 不是100的倍数
+    const before = game.wallet.get(ResourceType.MEAT);
+    game.tickResourceDecay();
+    expect(game.wallet.get(ResourceType.MEAT)).toBe(before);
+  });
+});
+
 describe('随机事件系统', () => {
   it('GameLoop 应该有 eventLog', () => {
     const game = new GameLoop();

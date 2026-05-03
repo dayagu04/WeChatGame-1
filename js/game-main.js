@@ -139,6 +139,17 @@ export default class GameMain {
         color,
       );
     });
+
+    // 资源衰减浮动文字
+    eventBus.on(GlobalEvents.RESOURCE_DECAY, (data) => {
+      const emoji = RES_FLOAT_EMOJI[data.resourceType] || '';
+      r.addFloatingText(
+        this.w / 2 + (Math.random() - 0.5) * 100,
+        this.h / 2,
+        `-${Math.floor(data.amount)}${emoji} (腐烂)`,
+        '#ff6666',
+      );
+    });
   }
 
   handleTap(x, y) {
