@@ -1252,6 +1252,17 @@ export class GameRenderer {
         ctx.font = '10px monospace';
         ctx.fillText(`产出: ${output.amount.toFixed(1)}/秒 ${emoji}`, px + 10, ty);
         ty += 14;
+
+        // 产出分解（基础 * 研究 * 士气 * 效率）
+        const mult = gameLoop.research.getOutputMultiplier(b.type);
+        const morale = gameLoop.getMoraleMultiplier();
+        const eff = gameLoop.getWorkerEfficiency();
+        ctx.fillStyle = '#888';
+        ctx.font = '9px monospace';
+        ctx.fillText(`基础×研究×士气×效率`, px + 10, ty);
+        ty += 12;
+        ctx.fillText(`${(output.amount / b.assignedWorkers.length / mult / morale / eff).toFixed(1)}×${mult.toFixed(2)}×${morale.toFixed(2)}×${Math.floor(eff * 100)}%`, px + 10, ty);
+        ty += 14;
       }
     }
 
