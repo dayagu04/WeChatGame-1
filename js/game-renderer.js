@@ -1276,9 +1276,24 @@ export class GameRenderer {
       const cost = b.getUpgradeCost();
       const costType = Object.keys(cost)[0];
       const costVal = cost[costType];
+      const currentVal = Math.floor(gameLoop.wallet.get(costType));
       const canAfford = gameLoop.wallet.canAfford(cost);
+
       ctx.fillStyle = canAfford ? '#4ecdc4' : '#ff6b6b';
       ctx.fillText(`建造费用: ${costVal} ${costType.replace('RES_', '')}`, px + 10, ty);
+      ty += 14;
+
+      // 显示当前资源/需要资源
+      ctx.fillStyle = currentVal >= costVal ? '#4ecdc4' : '#ffaa00';
+      ctx.fillText(`当前: ${currentVal}/${costVal}`, px + 10, ty);
+      ty += 14;
+
+      // 进度条
+      const pct = Math.min(1, currentVal / costVal);
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(px + 10, ty, panelW - 20, 8);
+      ctx.fillStyle = canAfford ? '#4ecdc4' : '#ffaa00';
+      ctx.fillRect(px + 10, ty, (panelW - 20) * pct, 8);
     }
   }
 
