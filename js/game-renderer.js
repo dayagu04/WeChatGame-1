@@ -438,6 +438,60 @@ export class GameRenderer {
         ctx.fill();
       }
     }
+
+    // 伐木场：斧头动画（生产时）
+    const lumber = gameLoop.buildings.get(BuildingType.LUMBER_CAMP);
+    if (lumber.isUnlocked() && lumber.state === BuildingState.PRODUCING) {
+      const pos = BUILDING_WORLD_POSITIONS[BuildingType.LUMBER_CAMP];
+      const sp = cam.worldToScreen(pos.x + pos.w / 2, pos.y + pos.h / 2);
+      if (sp.x > -30 && sp.x < this.w + 30) {
+        const t = this.animTime;
+        const swing = Math.sin(t * 5) * 0.4;
+        ctx.save();
+        ctx.translate(sp.x + 15, sp.y - 10);
+        ctx.rotate(swing);
+        ctx.fillStyle = '#8b7355';
+        ctx.fillRect(-2, -12, 4, 12);
+        ctx.fillStyle = '#aaa';
+        ctx.fillRect(-5, -14, 10, 4);
+        ctx.restore();
+      }
+    }
+
+    // 煤矿：火花动画（生产时）
+    const coalMine = gameLoop.buildings.get(BuildingType.COAL_MINE);
+    if (coalMine.isUnlocked() && coalMine.state === BuildingState.PRODUCING) {
+      const pos = BUILDING_WORLD_POSITIONS[BuildingType.COAL_MINE];
+      const sp = cam.worldToScreen(pos.x + pos.w / 2, pos.y + pos.h / 3);
+      if (sp.x > -20 && sp.x < this.w + 20) {
+        const t = this.animTime;
+        ctx.fillStyle = '#ffa500';
+        for (let i = 0; i < 3; i++) {
+          const sparkX = sp.x + Math.sin(t * 8 + i * 2) * 8;
+          const sparkY = sp.y - Math.abs(Math.sin(t * 6 + i)) * 6;
+          const size = 1.5 + Math.sin(t * 10 + i) * 0.5;
+          ctx.beginPath();
+          ctx.arc(sparkX, sparkY, size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // 研究工坊：魔法光环（研究时）
+    const workshop = gameLoop.buildings.get(BuildingType.WORKSHOP);
+    if (workshop.isUnlocked() && workshop.state === BuildingState.PRODUCING) {
+      const pos = BUILDING_WORLD_POSITIONS[BuildingType.WORKSHOP];
+      const sp = cam.worldToScreen(pos.x + pos.w / 2, pos.y + pos.h / 2);
+      if (sp.x > -40 && sp.x < this.w + 40) {
+        const t = this.animTime;
+        const pulse = Math.sin(t * 2) * 0.3 + 0.7;
+        ctx.strokeStyle = `rgba(100,200,255,${pulse * 0.3})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, 20 + Math.sin(t * 3) * 5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
   }
 
   // ---- 资源运输动画 ----
