@@ -1269,6 +1269,16 @@ export class GameRenderer {
         ty += 12;
         ctx.fillText(`${(output.amount / b.assignedWorkers.length / mult / morale / eff).toFixed(1)}×${mult.toFixed(2)}×${morale.toFixed(2)}×${Math.floor(eff * 100)}%`, px + 10, ty);
         ty += 14;
+
+        // 产能警告（如果接近容量上限）
+        const cap = gameLoop.wallet.getStorageCap(output.type);
+        const current = gameLoop.wallet.get(output.type);
+        const pct = Math.floor(current / cap * 100);
+        if (pct >= 80) {
+          ctx.fillStyle = pct >= 90 ? '#ff4444' : '#ffaa00';
+          ctx.fillText(`⚠ 容量 ${pct}%`, px + 10, ty);
+          ty += 14;
+        }
       }
     }
 
