@@ -711,6 +711,12 @@ export class GameRenderer {
     if (w.blizzardState === 'BLZ_IDLE' && forecast.nextBlizzardIn > 0) {
       const min = Math.ceil(forecast.nextBlizzardIn / 60000);
       forecastStr = ` 📢预计${min}分钟后暴风雪(${forecast.severityName})`;
+    } else if (w.blizzardState === 'BLZ_WARNING' && forecast.warningTimeLeft > 0) {
+      const sec = Math.ceil(forecast.warningTimeLeft / 1000);
+      forecastStr = ` ⚠️暴风雪预警 ${sec}秒后来袭(${forecast.severityName})`;
+    } else if (w.blizzardState === 'BLZ_ACTIVE' && forecast.activeTimeLeft > 0) {
+      const sec = Math.ceil(forecast.activeTimeLeft / 1000);
+      forecastStr = ` 🌪️暴风雪肆虐 ${sec}秒后结束`;
     }
 
     ctx.fillText(`${emoji}${effectiveTemp.toFixed(1)}°C${warmthStr} ${timeEmoji}${timeStr}${effStr} 暴风雪:${blizName}${forecastStr}`, 10, y + 18);
