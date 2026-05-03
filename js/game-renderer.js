@@ -1030,6 +1030,19 @@ export class GameRenderer {
     ctx.textAlign = 'center';
     ctx.fillText(`${Math.floor(pct * 100)}%`, x + w / 2, barY + 7);
     ctx.textAlign = 'left';
+
+    // 升级脉冲光环（接近完成时）
+    if (pct > 0.8) {
+      const pulseAlpha = (pct - 0.8) * 2 * (0.3 + Math.sin(t * 6) * 0.1);
+      const grad = ctx.createRadialGradient(
+        x + w / 2, y + h / 2, 0,
+        x + w / 2, y + h / 2, Math.max(w, h) * 0.8,
+      );
+      grad.addColorStop(0, `rgba(255,215,0,${pulseAlpha})`);
+      grad.addColorStop(1, 'rgba(255,215,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(x - w * 0.2, y - h * 0.2, w * 1.4, h * 1.4);
+    }
   }
 
   // ---- 建筑信息面板（选中时显示） ----
