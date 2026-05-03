@@ -12,46 +12,57 @@ const BUILDING_CONFIGS = {
   [BuildingType.FURNACE]: {
     name: '大火炉', emoji: '🔥',
     baseCost: 100, costType: ResourceType.WOOD, baseTimeSec: 30, baseSlots: 0,
+    description: '燃烧煤炭为营地提供温暖',
   },
   [BuildingType.LUMBER_CAMP]: {
     name: '伐木场', emoji: '🪓',
     baseCost: 80, costType: ResourceType.WOOD, baseTimeSec: 20, baseSlots: 3,
+    description: '工人砍伐木材用于建造',
   },
   [BuildingType.COAL_MINE]: {
     name: '煤矿', emoji: '⛏️',
     baseCost: 120, costType: ResourceType.WOOD, baseTimeSec: 25, baseSlots: 3,
+    description: '开采煤炭作为燃料',
   },
   [BuildingType.HUNTER_HUT]: {
     name: '猎人小屋', emoji: '🏹',
     baseCost: 100, costType: ResourceType.WOOD, baseTimeSec: 20, baseSlots: 2,
+    description: '猎人外出捕猎获取肉类',
   },
   [BuildingType.COOKHOUSE]: {
     name: '厨房', emoji: '🍳',
     baseCost: 150, costType: ResourceType.WOOD, baseTimeSec: 30, baseSlots: 2,
+    description: '将肉类烹饪成口粮',
   },
   [BuildingType.CLINIC]: {
     name: '医疗站', emoji: '🏥',
     baseCost: 200, costType: ResourceType.WOOD, baseTimeSec: 40, baseSlots: 2,
+    description: '治疗生病的工人',
   },
   [BuildingType.SHELTER]: {
     name: '庇护所', emoji: '🏠',
     baseCost: 120, costType: ResourceType.WOOD, baseTimeSec: 25, baseSlots: 0,
+    description: '为工人提供庇护，减缓健康下降',
   },
   [BuildingType.WORKSHOP]: {
     name: '研究工坊', emoji: '🔬',
     baseCost: 300, costType: ResourceType.WOOD, baseTimeSec: 45, baseSlots: 2,
+    description: '研究新科技提升营地能力',
   },
   [BuildingType.TRADING_POST]: {
     name: '交易站', emoji: '🏪',
     baseCost: 200, costType: ResourceType.WOOD, baseTimeSec: 35, baseSlots: 1,
+    description: '与商队交易获取稀有资源',
   },
   [BuildingType.WATCHTOWER]: {
     name: '瞭望塔', emoji: '🗼',
     baseCost: 250, costType: ResourceType.WOOD, baseTimeSec: 40, baseSlots: 1,
+    description: '提升全体工人工作效率+5%/人',
   },
   [BuildingType.LIBRARY]: {
     name: '图书馆', emoji: '📚',
     baseCost: 350, costType: ResourceType.WOOD, baseTimeSec: 50, baseSlots: 2,
+    description: '加快研究速度+20%/人',
   },
 };
 

@@ -1072,7 +1072,15 @@ export class GameRenderer {
     ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'left';
     ctx.fillText(`${b.emoji} ${b.name}`, px + 10, ty);
-    ty += 18;
+    ty += 16;
+
+    // 建筑描述
+    if (b.config.description) {
+      ctx.fillStyle = '#88aacc';
+      ctx.font = '10px sans-serif';
+      ctx.fillText(b.config.description, px + 10, ty);
+      ty += 14;
+    }
 
     // 等级
     ctx.fillStyle = '#ffd700';
