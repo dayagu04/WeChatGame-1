@@ -75,6 +75,11 @@ export class GameRenderer {
 
     // 地平线 Y（屏幕空间）
     this.horizonY = Math.floor(this.h * HORIZON_RATIO);
+
+    // 通知队列
+    this.notifications = [];
+    this.maxNotifications = 4;
+    this.notifDuration = 4000; // 4秒
   }
 
   render(gameLoop) {
@@ -109,7 +114,10 @@ export class GameRenderer {
     drawWorldRocks(ctx, cam.x, cam.y, this.w, this.h);
     ctx.restore();
 
-    // === 5. 建筑 ===
+    // === 5. 建筑地面效果（火炉光芒等） ===
+    this.drawWorldAmbientEffects(gameLoop, cam);
+
+    // === 6. 建筑 ===
     const buildings = gameLoop.buildings.getAll();
     for (const b of buildings) {
       const pos = BUILDING_WORLD_POSITIONS[b.type];
@@ -150,6 +158,132 @@ export class GameRenderer {
 
     // === 10. 小地图 ===
     this.drawMinimap(gameLoop, cam);
+
+    // === 11. 建筑信息面板 ===
+    if (this.selectedBuilding) {
+      this.drawBuildingInfoPanel(gameLoop);
+    }
+
+    // === 12. 通知 ===
+    this.drawNotifications();
+  }
+
+  // 添加通知
+  addNotification(text, type) {
+    this.notifications.push({
+      text,
+      type: type || 'info', // info, success, warning, danger
+      ts: Date.now(),
+    });
+    if (this.notifications.length > this.maxNotifications) {
+      this.notifications.shift();
+    }
+  }
+
+  drawNotifications() {
+    const ctx = this.ctx;
+    const now = Date.now();
+    const baseY = this.safeTop + HUD.RESOURCE_BAR_H + HUD.WEATHER_BAR_H + 4;
+    const notifH = 22;
+    const gap = 4;
+
+    // 清除过期通知
+    this.notifications = this.notifications.filter(n => now - n.ts < this.notifDuration);
+
+    for (let i = 0; i < this.notifications.length; i++) {
+      const n = this.notifications[i];
+      const age = now - n.ts;
+      const fadeOut = age > this.notifDuration - 500 ? (this.notifDuration - age) / 500 : 1;
+      const y = baseY + i * (notifH + gap);
+
+      ctx.globalAlpha = fadeOut * 0.9;
+
+      const colors = {
+        info: 'rgba(50,100,150,0.85)',
+        success: 'rgba(40,120,80,0.85)',
+        warning: 'rgba(150,100,30,0.85)',
+        danger: 'rgba(150,40,40,0.85)',
+      };
+      ctx.fillStyle = colors[n.type] || colors.info;
+      roundRect(ctx, 8, y, this.w - 16, notifH, 4);
+      ctx.fill();
+
+      ctx.fillStyle = '#fff';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(n.text, this.w / 2, y + 15);
+      ctx.textAlign = 'left';
+
+      ctx.globalAlpha = 1;
+    }
+  }
+  }
+
+  // ---- 世界环境效果 ----
+  drawWorldAmbientEffects(gameLoop, cam) {
+    const ctx = this.ctx;
+
+    // 火炉温暖光芒（扩散到地面）
+    const furnace = gameLoop.buildings.get(BuildingType.FURNACE);
+    if (furnace.isUnlocked() && furnace.state !== BuildingState.FROZEN) {
+      const pos = BUILDING_WORLD_POSITIONS[BuildingType.FURNACE];
+      const sp = cam.worldToScreen(pos.x + pos.w / 2, pos.y + pos.h);
+      if (sp.x > -100 && sp.x < this.w + 100 && sp.y > -100 && sp.y < this.h + 100) {
+        const t = this.animTime;
+        const glowR = 60 + Math.sin(t * 2) * 10 + furnace.level * 8;
+        const grad = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, glowR);
+        grad.addColorStop(0, `rgba(255,150,50,${0.12 + furnace.level * 0.02})`);
+        grad.addColorStop(0.5, 'rgba(255,100,30,0.05)');
+        grad.addColorStop(1, 'rgba(255,80,20,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(sp.x - glowR, sp.y - glowR, glowR * 2, glowR * 2);
+      }
+    }
+
+    // 烟囱烟雾粒子（火炉和厨房）
+    const smokeBuildings = [
+      { type: BuildingType.FURNACE, offsetX: 0, offsetY: -10 },
+      { type: BuildingType.COOKHOUSE, offsetX: 10, offsetY: -5 },
+    ];
+    for (const sb of smokeBuildings) {
+      const b = gameLoop.buildings.get(sb.type);
+      if (!b.isUnlocked() || b.state === BuildingState.FROZEN) continue;
+      if (b.state !== BuildingState.PRODUCING && b.state !== BuildingState.NORMAL) continue;
+
+      const pos = BUILDING_WORLD_POSITIONS[sb.type];
+      const sp = cam.worldToScreen(pos.x + pos.w / 2 + sb.offsetX, pos.y + sb.offsetY);
+      if (sp.x < -20 || sp.x > this.w + 20 || sp.y < -40 || sp.y > this.h + 20) continue;
+
+      const t = this.animTime;
+      ctx.fillStyle = 'rgba(180,180,190,0.25)';
+      for (let i = 0; i < 4; i++) {
+        const ox = Math.sin(t * 1.5 + i * 1.8) * (4 + i * 2);
+        const oy = -i * 8 - Math.abs(Math.sin(t + i)) * 3;
+        const r = 3 + i * 1.5;
+        ctx.beginPath();
+        ctx.arc(sp.x + ox, sp.y + oy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 猎人小屋附近的兔子（生产时）
+    const hunter = gameLoop.buildings.get(BuildingType.HUNTER_HUT);
+    if (hunter.isUnlocked() && hunter.state === BuildingState.PRODUCING) {
+      const pos = BUILDING_WORLD_POSITIONS[BuildingType.HUNTER_HUT];
+      const sp = cam.worldToScreen(pos.x + pos.w + 15, pos.y + pos.h - 5);
+      if (sp.x > -20 && sp.x < this.w + 20) {
+        const t = this.animTime;
+        const hop = Math.abs(Math.sin(t * 3)) * 4;
+        ctx.fillStyle = '#bbb';
+        ctx.beginPath();
+        ctx.ellipse(sp.x, sp.y - hop, 5, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ddd';
+        ctx.beginPath();
+        ctx.ellipse(sp.x + 3, sp.y - hop - 3, 2, 4, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
 
   // ---- 工人世界渲染 ----
@@ -359,6 +493,98 @@ export class GameRenderer {
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1;
     ctx.strokeRect(vpX, vpY, vpW, vpH);
+  }
+
+  // ---- 建筑信息面板（选中时显示） ----
+  drawBuildingInfoPanel(gameLoop) {
+    const ctx = this.ctx;
+    const b = gameLoop.buildings.get(this.selectedBuilding);
+    if (!b) return;
+
+    const panelW = 200;
+    const panelH = 160;
+    const px = this.w - panelW - 8;
+    const py = this.safeTop + HUD.RESOURCE_BAR_H + HUD.WEATHER_BAR_H + 40;
+
+    // 面板背景
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    roundRect(ctx, px, py, panelW, panelH, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(100,149,237,0.5)';
+    ctx.lineWidth = 1;
+    roundRect(ctx, px, py, panelW, panelH, 8);
+    ctx.stroke();
+
+    let ty = py + 16;
+
+    // 建筑名称 + emoji
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${b.emoji} ${b.name}`, px + 10, ty);
+    ty += 18;
+
+    // 等级
+    ctx.fillStyle = '#ffd700';
+    ctx.font = '11px monospace';
+    ctx.fillText(`等级: ${b.level > 0 ? 'Lv.' + b.level : '未建造'}`, px + 10, ty);
+    ty += 16;
+
+    // 状态
+    const STATE_LABELS = {
+      0: '🔒 未解锁', 1: '✅ 空闲', 2: '🔨 升级中',
+      3: '⚙️ 生产中', 4: '❌ 缺人', 5: '❌ 缺料', 6: '🧊 冻结',
+    };
+    ctx.fillStyle = b.state === 6 ? '#66ccff' : b.state >= 4 ? '#ff6b6b' : '#aaa';
+    ctx.fillText(`状态: ${STATE_LABELS[b.state] || '未知'}`, px + 10, ty);
+    ty += 16;
+
+    // 工人槽位
+    if (b.maxSlots > 0) {
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(`工人: ${b.assignedWorkers.length}/${b.maxSlots}`, px + 10, ty);
+      ty += 16;
+    }
+
+    // 升级进度
+    if (b.state === BuildingState.UPGRADING) {
+      const elapsed = Date.now() - b.upgradeStartTimeMs;
+      const pct = Math.min(1, elapsed / b.upgradeDurationMs);
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(px + 10, ty, panelW - 20, 10);
+      ctx.fillStyle = '#4ecdc4';
+      ctx.fillRect(px + 10, ty, (panelW - 20) * pct, 10);
+      ctx.fillStyle = '#fff';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`升级中 ${Math.floor(pct * 100)}%`, px + panelW / 2, ty + 9);
+      ctx.textAlign = 'left';
+      ty += 16;
+    }
+
+    // 升级费用
+    if (b.isUnlocked() && b.state !== BuildingState.UPGRADING) {
+      const cost = b.getUpgradeCost();
+      const costType = Object.keys(cost)[0];
+      const costVal = cost[costType];
+      const canAfford = gameLoop.wallet.canAfford(cost);
+      ctx.fillStyle = canAfford ? '#4ecdc4' : '#ff6b6b';
+      ctx.fillText(`升级费用: ${costVal} ${costType.replace('RES_', '')}`, px + 10, ty);
+      ty += 14;
+      const timeSec = Math.floor(b.getUpgradeTimeMs() / 1000);
+      ctx.fillStyle = '#888';
+      ctx.fillText(`升级时间: ${timeSec}秒`, px + 10, ty);
+    }
+
+    // 建造费用
+    if (!b.isUnlocked()) {
+      const cost = b.getUpgradeCost();
+      const costType = Object.keys(cost)[0];
+      const costVal = cost[costType];
+      const canAfford = gameLoop.wallet.canAfford(cost);
+      ctx.fillStyle = canAfford ? '#4ecdc4' : '#ff6b6b';
+      ctx.fillText(`建造费用: ${costVal} ${costType.replace('RES_', '')}`, px + 10, ty);
+    }
   }
 }
 

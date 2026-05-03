@@ -76,20 +76,45 @@ export default class GameMain {
   }
 
   setupLogging() {
+    const r = this.renderer;
+
     eventBus.on(GlobalEvents.BUILDING_STATE_CHANGE, (data) => {
       console.log(`[Event] Building state change: ${data.buildingId} -> ${data.newState}`);
     });
     eventBus.on(GlobalEvents.BUILDING_UPGRADE_COMPLETE, (data) => {
       console.log(`[Event] Building upgrade complete: ${data.buildingId} -> Lv.${data.newLevel}`);
+      r.addNotification(`建筑升级完成！${data.buildingId} -> Lv.${data.newLevel}`, 'success');
     });
     eventBus.on(GlobalEvents.WORKER_STATE_CHANGE, (data) => {
       console.log(`[Event] Worker state change: ${data.workerId} -> ${data.newState}`);
     });
     eventBus.on(GlobalEvents.EXPEDITION_COMPLETE, (data) => {
       console.log(`[Event] Expedition complete: ${data.workerId} got ${data.rewardAmount} ${data.rewardType}, injured=${data.injured}`);
+      r.addNotification(`探索归来！获得 ${data.rewardAmount} ${data.rewardType.replace('RES_', '')}`, 'success');
     });
     eventBus.on(GlobalEvents.WORKER_DIED, (data) => {
       console.log(`[Event] Worker died: ${data.workerId}, reason=${data.reason}`);
+      r.addNotification(`工人死亡！原因: ${data.reason === 'sickness' ? '疾病' : '饥饿'}`, 'danger');
+    });
+    eventBus.on(GlobalEvents.RANDOM_EVENT, (data) => {
+      const type = data.type === 'POSITIVE' ? 'info' : 'warning';
+      r.addNotification(`${data.name}: ${data.detail}`, type);
+    });
+    eventBus.on(GlobalEvents.WEATHER_CHANGED, (data) => {
+      if (data.phase === 'warning') {
+        r.addNotification('暴风雪预警！准备煤炭和食物！', 'warning');
+      } else if (data.phase === 'active') {
+        r.addNotification('暴风雪来袭！工人加速掉血！', 'danger');
+      }
+    });
+    eventBus.on(GlobalEvents.ACHIEVEMENT_UNLOCK, (data) => {
+      r.addNotification(`成就解锁: ${data.name}！`, 'success');
+    });
+    eventBus.on(GlobalEvents.RESEARCH_COMPLETE, (data) => {
+      r.addNotification(`研究完成: ${data.name}`, 'success');
+    });
+    eventBus.on(GlobalEvents.CARAVAN_ARRIVE, () => {
+      r.addNotification('商队到达！交易享受折扣！', 'info');
     });
   }
 
