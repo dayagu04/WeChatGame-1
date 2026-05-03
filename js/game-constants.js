@@ -24,6 +24,8 @@ export const BuildingType = {
   SHELTER: 'BLD_SHELTER',
   WORKSHOP: 'BLD_WORKSHOP',
   TRADING_POST: 'BLD_TRADING_POST',
+  WATCHTOWER: 'BLD_WATCHTOWER',
+  LIBRARY: 'BLD_LIBRARY',
 };
 
 // ---- 建筑状态 ----

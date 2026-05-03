@@ -209,7 +209,7 @@ describe('BuildingManager - 建筑系统', () => {
   it('getAll 应该返回所有建筑', () => {
     const bm = new BuildingManager();
     const all = bm.getAll();
-    expect(all.length).toBe(9); // 9种建筑
+    expect(all.length).toBe(11); // 11种建筑
   });
 
   it('getUnlocked 应该只返回已解锁建筑', () => {
@@ -542,6 +542,8 @@ describe('点击区域计算 - HUD 常量与世界空间', () => {
       'BLD_SHELTER': { x: 1300, y: 630, w: 100, h: 80 },
       'BLD_WORKSHOP': { x: 1950, y: 570, w: 100, h: 80 },
       'BLD_TRADING_POST': { x: 2100, y: 610, w: 100, h: 80 },
+      'BLD_WATCHTOWER': { x: 400, y: 500, w: 80, h: 120 },
+      'BLD_LIBRARY': { x: 2250, y: 560, w: 110, h: 85 },
     };
     const types = Object.values(BuildingType);
     for (const t of types) {

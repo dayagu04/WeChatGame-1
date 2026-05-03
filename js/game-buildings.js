@@ -45,6 +45,14 @@ const BUILDING_CONFIGS = {
     name: '交易站', emoji: '🏪',
     baseCost: 200, costType: ResourceType.WOOD, baseTimeSec: 35, baseSlots: 1,
   },
+  [BuildingType.WATCHTOWER]: {
+    name: '瞭望塔', emoji: '🗼',
+    baseCost: 250, costType: ResourceType.WOOD, baseTimeSec: 40, baseSlots: 1,
+  },
+  [BuildingType.LIBRARY]: {
+    name: '图书馆', emoji: '📚',
+    baseCost: 350, costType: ResourceType.WOOD, baseTimeSec: 50, baseSlots: 2,
+  },
 };
 
 function calcUpgradeCost(baseCost, level) {

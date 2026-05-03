@@ -93,7 +93,8 @@ export class ResearchManager {
   }
 
   // 每 tick 推进研究
-  tick(wallet, buildings) {
+  tick(wallet, buildings, speedMultiplier) {
+    const mult = speedMultiplier || 1.0;
     for (const [, tech] of this.techs) {
       if (tech.state !== TechState.RESEARCHING) continue;
 
@@ -106,7 +107,7 @@ export class ResearchManager {
         }
       }
 
-      tech.progressMs += 1000; // TICK_INTERVAL_MS
+      tech.progressMs += 1000 * mult; // TICK_INTERVAL_MS * speedMultiplier
       if (tech.progressMs >= tech.durationMs) {
         tech.state = TechState.DONE;
         this.applyEffect(tech, wallet, buildings);

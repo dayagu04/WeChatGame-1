@@ -1241,6 +1241,8 @@ export const BUILDING_WORLD_POSITIONS = {
   'BLD_SHELTER':      { x: 1300, y: 630, w: 100, h: 80 },
   'BLD_WORKSHOP':     { x: 1950, y: 570, w: 100, h: 80 },
   'BLD_TRADING_POST': { x: 2100, y: 610, w: 100, h: 80 },
+  'BLD_WATCHTOWER':   { x: 400,  y: 500, w: 80, h: 120 },
+  'BLD_LIBRARY':      { x: 2250, y: 560, w: 110, h: 85 },
 };
 
 // 获取建筑在世界中的锚点（底部中心，用于工人站位）

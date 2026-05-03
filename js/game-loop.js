@@ -193,7 +193,7 @@ export class GameLoop {
     }
 
     // Phase 3.5: 研究推进 + 交易站
-    this.research.tick(this.wallet, this.buildings);
+    this.research.tick(this.wallet, this.buildings, this.getResearchSpeedMultiplier());
     this.trading.tick();
 
     // Phase 3.6: 资源衰减（食物腐烂）
@@ -226,9 +226,30 @@ export class GameLoop {
   // 获取工人效率（白天100%，夜晚80%）
   getWorkerEfficiency() {
     const t = this.getTimeOfDay();
-    if (t < 0.2 || t > 0.85) return 0.8; // 夜晚
-    if (t < 0.3 || t > 0.7) return 0.9; // 黎明/黄昏
-    return 1.0; // 白天
+    let base = 1.0;
+    if (t < 0.2 || t > 0.85) base = 0.8; // 夜晚
+    else if (t < 0.3 || t > 0.7) base = 0.9; // 黎明/黄昏
+
+    // 瞭望塔加成（每个工人+5%效率，最高+15%）
+    const watchtower = this.buildings.get(BuildingType.WATCHTOWER);
+    if (watchtower.isUnlocked()) {
+      const workers = this.workers.workers.filter(
+        w => w.assignedBuilding === BuildingType.WATCHTOWER && w.state === WorkerState.WORKING
+      );
+      base += workers.length * 0.05;
+    }
+
+    return Math.min(1.2, base);
+  }
+
+  // 获取研究速度加成（图书馆效果）
+  getResearchSpeedMultiplier() {
+    const library = this.buildings.get(BuildingType.LIBRARY);
+    if (!library.isUnlocked()) return 1.0;
+    const workers = this.workers.workers.filter(
+      w => w.assignedBuilding === BuildingType.LIBRARY && w.state === WorkerState.WORKING
+    );
+    return 1.0 + workers.length * 0.2; // 每个工人+20%研究速度
   }
 
   // 营地士气计算
@@ -346,6 +367,8 @@ export class GameLoop {
       case BuildingType.SHELTER:
       case BuildingType.WORKSHOP:
       case BuildingType.TRADING_POST:
+      case BuildingType.WATCHTOWER:
+      case BuildingType.LIBRARY:
         return null;
       default:
         return null;
