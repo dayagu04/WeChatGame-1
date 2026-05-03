@@ -753,10 +753,11 @@ describe('ResearchManager - 科技树系统', () => {
 
   it('research.outputMultiplier 应该影响建筑产出', () => {
     const game = new GameLoop();
+    game.campMorale = 80; // 士气 80 → 乘数 1.0
     // 手动完成高效伐木科技
     game.research.get('TECH_EFFICIENT_LUMBER').state = TechState.DONE;
     const output = game.getBuildingOutput(BuildingType.LUMBER_CAMP, 1);
-    expect(output.amount).toBe(2.0 * 1.3); // base 2.0 * 1.3 mult
+    expect(output.amount).toBe(2.0 * 1.3); // base 2.0 * 1.3 mult * 1.0 morale
   });
 });
 

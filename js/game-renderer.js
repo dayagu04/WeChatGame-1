@@ -569,9 +569,10 @@ export class GameRenderer {
     const idle = alive.filter(w => w.state === WorkerState.IDLE).length;
     const sick = alive.filter(w => w.state === WorkerState.SICK || w.state === WorkerState.HEALING).length;
     const exploring = alive.filter(w => w.state === WorkerState.EXPLORING).length;
+    const morale = Math.floor(gameLoop.campMorale);
 
-    const panelW = 90;
-    const panelH = 68;
+    const panelW = 95;
+    const panelH = 82;
     const px = 8;
     const py = this.h - HUD.BOTTOM_BAR_H - panelH - 4;
 
@@ -585,22 +586,31 @@ export class GameRenderer {
 
     ctx.fillStyle = '#fff';
     ctx.fillText(`👷 总人口: ${alive.length}`, px + 6, ty);
-    ty += 13;
+    ty += 12;
     ctx.fillStyle = '#4ecdc4';
-    ctx.fillText(`⚒️ 工作中: ${working}`, px + 6, ty);
-    ty += 13;
+    ctx.fillText(`⚒️ 工作: ${working}`, px + 6, ty);
+    ty += 12;
     ctx.fillStyle = '#aaa';
     ctx.fillText(`💤 空闲: ${idle}`, px + 6, ty);
-    ty += 13;
+    ty += 12;
     if (sick > 0) {
       ctx.fillStyle = '#ff6b6b';
       ctx.fillText(`🏥 生病: ${sick}`, px + 6, ty);
-      ty += 13;
+      ty += 12;
     }
     if (exploring > 0) {
       ctx.fillStyle = '#ffd700';
       ctx.fillText(`🧭 探索: ${exploring}`, px + 6, ty);
+      ty += 12;
     }
+    // 士气条
+    const moraleColor = morale >= 70 ? '#4ecdc4' : morale >= 40 ? '#ffaa00' : '#ff4444';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`❤️ 士气:`, px + 6, ty);
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(px + 56, ty - 7, 30, 8);
+    ctx.fillStyle = moraleColor;
+    ctx.fillRect(px + 56, ty - 7, 30 * (morale / 100), 8);
   }
 
   // ---- 日夜遮罩 ----

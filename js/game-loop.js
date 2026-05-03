@@ -24,6 +24,10 @@ export class GameLoop {
     this._blizzardSurvived = false;
     this._prevBlizzardState = 'BLZ_IDLE';
 
+    // 营地士气（0-100，影响生产效率）
+    this.campMorale = 70;
+    this._deathPenaltyTicks = 0;
+
     this.tickCount = 0;
     this.lastSaveTs = Date.now();
     this.aniId = 0;
@@ -53,6 +57,11 @@ export class GameLoop {
 
     // 监听Tick
     eventBus.on(GlobalEvents.TICK_UPDATE, () => this.onTick());
+
+    // 工人死亡时设置士气惩罚
+    eventBus.on(GlobalEvents.WORKER_DIED, () => {
+      this._deathPenaltyTicks = 60; // 60 tick 的士气惩罚
+    });
   }
 
   start() {
@@ -114,6 +123,9 @@ export class GameLoop {
       }
       return false;
     }, shelterLevel, coldResist);
+
+    // Phase 2.5: 营地士气计算
+    this.tickMorale();
 
     // Phase 3: 建筑生产 + 特殊建筑逻辑 + 研究
     for (const b of this.buildings.getUnlocked()) {
@@ -205,6 +217,49 @@ export class GameLoop {
     return 1.0; // 白天
   }
 
+  // 营地士气计算
+  tickMorale() {
+    const alive = this.workers.getAlive();
+    if (alive.length === 0) return;
+
+    // 基础士气
+    let target = 50;
+
+    // 平均健康加成（0~+20）
+    const avgHealth = alive.reduce((s, w) => s + w.health, 0) / alive.length;
+    target += avgHealth * 0.2;
+
+    // 平均饱食加成（0~+15）
+    const avgHunger = alive.reduce((s, w) => s + w.hunger, 0) / alive.length;
+    target += avgHunger * 0.15;
+
+    // 暴风雪惩罚（-20）
+    if (this.weather.blizzardState === 'BLZ_ACTIVE') {
+      target -= 20;
+    }
+
+    // 工人死亡惩罚（持续一段时间）
+    if (this._deathPenaltyTicks > 0) {
+      target -= 15;
+      this._deathPenaltyTicks--;
+    }
+
+    // 生病工人惩罚
+    const sickCount = alive.filter(w => w.state === WorkerState.SICK).length;
+    target -= sickCount * 5;
+
+    // 平滑过渡到目标值
+    this.campMorale += (target - this.campMorale) * 0.05;
+    this.campMorale = Math.max(0, Math.min(100, this.campMorale));
+  }
+
+  // 士气对生产的乘数（0.5 ~ 1.2）
+  getMoraleMultiplier() {
+    if (this.campMorale >= 80) return 1.0 + (this.campMorale - 80) * 0.01; // 1.0 ~ 1.2
+    if (this.campMorale >= 40) return 0.7 + (this.campMorale - 40) * 0.0075; // 0.7 ~ 1.0
+    return 0.5 + (this.campMorale - 20) * 0.01; // 0.5 ~ 0.7
+  }
+
   // 医疗站治愈逻辑
   tickClinic(clinic, doctorCount, healSpeedBonus) {
     const bonus = healSpeedBonus || 0;
@@ -225,17 +280,18 @@ export class GameLoop {
   getBuildingOutput(type, workerCount) {
     const mult = this.research.getOutputMultiplier(type);
     const eff = this.getWorkerEfficiency();
+    const morale = this.getMoraleMultiplier();
     switch (type) {
       case BuildingType.LUMBER_CAMP:
-        return { type: ResourceType.WOOD, amount: 2.0 * workerCount * mult * eff };
+        return { type: ResourceType.WOOD, amount: 2.0 * workerCount * mult * eff * morale };
       case BuildingType.COAL_MINE:
-        return { type: ResourceType.COAL, amount: 1.5 * workerCount * mult * eff };
+        return { type: ResourceType.COAL, amount: 1.5 * workerCount * mult * eff * morale };
       case BuildingType.HUNTER_HUT:
-        return { type: ResourceType.MEAT, amount: 1.0 * workerCount * mult * eff };
+        return { type: ResourceType.MEAT, amount: 1.0 * workerCount * mult * eff * morale };
       case BuildingType.COOKHOUSE:
         if (this.wallet.get(ResourceType.MEAT) >= 1 * workerCount) {
           this.wallet.resources[ResourceType.MEAT] -= 1 * workerCount;
-          return { type: ResourceType.RATION, amount: 0.8 * workerCount * mult * eff };
+          return { type: ResourceType.RATION, amount: 0.8 * workerCount * mult * eff * morale };
         }
         return null;
       case BuildingType.CLINIC:
