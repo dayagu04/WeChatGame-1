@@ -683,6 +683,38 @@ export class GameRenderer {
     }
 
     ctx.fillText(`${emoji}${effectiveTemp.toFixed(1)}°C${warmthStr} ${timeEmoji}${timeStr}${effStr} 暴风雪:${blizName}${forecastStr}`, 10, y + 18);
+
+    // 日夜循环弧形指示器（右上角）
+    const arcX = this.w - 30;
+    const arcY = y + 13;
+    const arcR = 10;
+
+    // 弧形背景
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(arcX, arcY, arcR, Math.PI, 0);
+    ctx.stroke();
+
+    // 太阳/月亮位置
+    const angle = Math.PI + tod * Math.PI; // 从左到右
+    const dotX = arcX + Math.cos(angle) * arcR;
+    const dotY = arcY + Math.sin(angle) * arcR;
+
+    // 太阳或月亮
+    if (tod > 0.2 && tod < 0.8) {
+      // 白天：太阳
+      ctx.fillStyle = '#ffd700';
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, 3, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // 夜晚：月亮
+      ctx.fillStyle = '#c0c0c0';
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // ---- HUD: 底部操作栏 ----
