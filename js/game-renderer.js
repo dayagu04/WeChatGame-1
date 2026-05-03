@@ -944,6 +944,20 @@ export class GameRenderer {
     ctx.fillRect(px + 56, ty - 7, 30, 8);
     ctx.fillStyle = moraleColor;
     ctx.fillRect(px + 56, ty - 7, 30 * (morale / 100), 8);
+    ty += 12;
+
+    // 研究进度
+    const researching = gameLoop.research.getResearching();
+    if (researching.length > 0) {
+      const tech = researching[0];
+      const pct = Math.min(1, tech.progressMs / tech.durationMs);
+      ctx.fillStyle = '#88aacc';
+      ctx.fillText(`🔬 研究:`, px + 6, ty);
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(px + 56, ty - 7, 30, 8);
+      ctx.fillStyle = '#4ecdc4';
+      ctx.fillRect(px + 56, ty - 7, 30 * pct, 8);
+    }
   }
 
   // ---- 日夜遮罩 ----
