@@ -94,6 +94,7 @@ export const GlobalEvents = {
   CARAVAN_ARRIVE: 'EVT_CARAVAN_ARRIVE',
   CARAVAN_DEPART: 'EVT_CARAVAN_DEPART',
   ACHIEVEMENT_UNLOCK: 'EVT_ACHIEVEMENT_UNLOCK',
+  RESOURCE_PRODUCED: 'EVT_RESOURCE_PRODUCED',
 };
 
 // ==========================================

@@ -149,6 +149,11 @@ export class GameLoop {
           const output = this.getBuildingOutput(b.type, workersHere.length);
           if (output) {
             const added = this.wallet.add(output.type, output.amount);
+            if (added > 0) {
+              eventBus.emit(GlobalEvents.RESOURCE_PRODUCED, {
+                buildingType: b.type, resourceType: output.type, amount: added,
+              });
+            }
             if (b.type === BuildingType.COOKHOUSE && added === 0 && output.amount > 0) {
               b.state = BuildingState.HALTED_NO_MATERIAL;
             }

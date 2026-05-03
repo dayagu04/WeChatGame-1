@@ -57,6 +57,7 @@ export class GameRenderer {
     this.h = height;
     this.safeTop = safeTop || 0;
     this.selectedBuilding = null;
+    this.selectedWorker = null;
     this.animTime = 0;
 
     // 相机系统
@@ -80,6 +81,10 @@ export class GameRenderer {
     this.notifications = [];
     this.maxNotifications = 4;
     this.notifDuration = 4000; // 4秒
+
+    // 浮动文字队列
+    this.floatingTexts = [];
+    this.floatingDuration = 2000; // 2秒
   }
 
   render(gameLoop) {
@@ -159,13 +164,19 @@ export class GameRenderer {
     // === 10. 小地图 ===
     this.drawMinimap(gameLoop, cam);
 
-    // === 11. 建筑信息面板 ===
+    // === 11. 建筑/工人信息面板 ===
     if (this.selectedBuilding) {
       this.drawBuildingInfoPanel(gameLoop);
+    }
+    if (this.selectedWorker) {
+      this.drawWorkerInfoPanel(gameLoop);
     }
 
     // === 12. 通知 ===
     this.drawNotifications();
+
+    // === 13. 浮动文字 ===
+    this.drawFloatingTexts(cam);
   }
 
   // 添加通知
@@ -214,6 +225,40 @@ export class GameRenderer {
       ctx.fillText(n.text, this.w / 2, y + 15);
       ctx.textAlign = 'left';
 
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // 添加浮动文字（世界坐标）
+  addFloatingText(worldX, worldY, text, color) {
+    this.floatingTexts.push({
+      x: worldX, y: worldY, text,
+      color: color || '#4ecdc4',
+      ts: Date.now(),
+    });
+  }
+
+  drawFloatingTexts(cam) {
+    const ctx = this.ctx;
+    const now = Date.now();
+
+    this.floatingTexts = this.floatingTexts.filter(ft => now - ft.ts < this.floatingDuration);
+
+    for (const ft of this.floatingTexts) {
+      const age = now - ft.ts;
+      const progress = age / this.floatingDuration;
+      const fadeOut = progress > 0.7 ? (1 - progress) / 0.3 : 1;
+      const rise = progress * 30; // 向上漂浮 30px
+
+      const sp = cam.worldToScreen(ft.x, ft.y - rise);
+      if (sp.x < -50 || sp.x > this.w + 50 || sp.y < -20 || sp.y > this.h + 20) continue;
+
+      ctx.globalAlpha = fadeOut * 0.9;
+      ctx.fillStyle = ft.color;
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(ft.text, sp.x, sp.y);
+      ctx.textAlign = 'left';
       ctx.globalAlpha = 1;
     }
   }
@@ -584,6 +629,81 @@ export class GameRenderer {
       const canAfford = gameLoop.wallet.canAfford(cost);
       ctx.fillStyle = canAfford ? '#4ecdc4' : '#ff6b6b';
       ctx.fillText(`建造费用: ${costVal} ${costType.replace('RES_', '')}`, px + 10, ty);
+    }
+  }
+
+  // ---- 工人信息面板 ----
+  drawWorkerInfoPanel(gameLoop) {
+    const ctx = this.ctx;
+    const w = gameLoop.workers.workers.find(w => w.workerId === this.selectedWorker);
+    if (!w) { this.selectedWorker = null; return; }
+
+    const panelW = 180;
+    const panelH = 130;
+    const px = 8;
+    const py = this.safeTop + HUD.RESOURCE_BAR_H + HUD.WEATHER_BAR_H + 40;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    roundRect(ctx, px, py, panelW, panelH, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(100,200,150,0.5)';
+    ctx.lineWidth = 1;
+    roundRect(ctx, px, py, panelW, panelH, 8);
+    ctx.stroke();
+
+    let ty = py + 16;
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`👷 ${w.name}`, px + 10, ty);
+    ty += 18;
+
+    const STATE_LABELS = {
+      'WK_IDLE': '空闲', 'WK_WORKING': '工作中', 'WK_EATING': '进食中',
+      'WK_SICK': '生病', 'WK_HEALING': '治疗中', 'WK_EXPLORING': '探索中', 'WK_DEAD': '死亡',
+    };
+    ctx.fillStyle = w.state === 'WK_SICK' ? '#ff6b6b' : w.state === 'WK_WORKING' ? '#4ecdc4' : '#aaa';
+    ctx.font = '11px monospace';
+    ctx.fillText(`状态: ${STATE_LABELS[w.state] || w.state}`, px + 10, ty);
+    ty += 15;
+
+    // 健康条
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('健康:', px + 10, ty);
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(px + 50, ty - 8, 110, 10);
+    ctx.fillStyle = w.health > 50 ? '#4ecdc4' : w.health > 25 ? '#ffaa00' : '#ff4444';
+    ctx.fillRect(px + 50, ty - 8, 110 * (w.health / 100), 10);
+    ctx.fillStyle = '#fff';
+    ctx.font = '9px monospace';
+    ctx.fillText(`${Math.floor(w.health)}%`, px + 105, ty);
+    ty += 14;
+
+    // 饱食条
+    ctx.fillStyle = '#aaa';
+    ctx.font = '11px monospace';
+    ctx.fillText('饱食:', px + 10, ty);
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(px + 50, ty - 8, 110, 10);
+    ctx.fillStyle = w.hunger > 50 ? '#4ecdc4' : w.hunger > 25 ? '#ffaa00' : '#ff4444';
+    ctx.fillRect(px + 50, ty - 8, 110 * (w.hunger / 100), 10);
+    ctx.fillStyle = '#fff';
+    ctx.font = '9px monospace';
+    ctx.fillText(`${Math.floor(w.hunger)}%`, px + 105, ty);
+    ty += 14;
+
+    // 心情
+    ctx.fillStyle = '#aaa';
+    ctx.font = '11px monospace';
+    ctx.fillText(`心情: ${Math.floor(w.mood)}`, px + 10, ty);
+    ty += 14;
+
+    // 所属建筑
+    if (w.assignedBuilding) {
+      const b = gameLoop.buildings.get(w.assignedBuilding);
+      ctx.fillStyle = '#888';
+      ctx.fillText(`分配至: ${b ? b.name : w.assignedBuilding}`, px + 10, ty);
     }
   }
 }

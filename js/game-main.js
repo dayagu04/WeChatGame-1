@@ -9,7 +9,7 @@ import { BuildingType, BuildingState, ResourceType, WorkerState, EXPEDITION_CONF
 import { GameLoop } from './game-loop';
 import { GameRenderer, HUD } from './game-renderer';
 import { PersistenceManager } from './game-persistence';
-import { BUILDING_WORLD_POSITIONS } from './visual/sprites';
+import { BUILDING_WORLD_POSITIONS, getBuildingAnchor } from './visual/sprites';
 
 export default class GameMain {
   constructor() {
@@ -116,6 +116,29 @@ export default class GameMain {
     eventBus.on(GlobalEvents.CARAVAN_ARRIVE, () => {
       r.addNotification('商队到达！交易享受折扣！', 'info');
     });
+
+    // 浮动资源产出文字
+    const RES_FLOAT_EMOJI = {
+      [ResourceType.WOOD]: '🪵', [ResourceType.COAL]: '⬛',
+      [ResourceType.MEAT]: '🥩', [ResourceType.RATION]: '🍖',
+      [ResourceType.IRON]: '⚙️', [ResourceType.GEM]: '💎',
+    };
+    const RES_FLOAT_COLOR = {
+      [ResourceType.WOOD]: '#c4a265', [ResourceType.COAL]: '#888',
+      [ResourceType.MEAT]: '#e88', [ResourceType.RATION]: '#fa0',
+      [ResourceType.IRON]: '#aaf', [ResourceType.GEM]: '#4ee',
+    };
+    eventBus.on(GlobalEvents.RESOURCE_PRODUCED, (data) => {
+      const pos = getBuildingAnchor(data.buildingType);
+      const emoji = RES_FLOAT_EMOJI[data.resourceType] || '';
+      const color = RES_FLOAT_COLOR[data.resourceType] || '#4ecdc4';
+      r.addFloatingText(
+        pos.x + (Math.random() - 0.5) * 20,
+        pos.y - 20,
+        `+${Math.floor(data.amount)}${emoji}`,
+        color,
+      );
+    });
   }
 
   handleTap(x, y) {
@@ -153,12 +176,29 @@ export default class GameMain {
           worldPos.y >= pos.y && worldPos.y <= pos.y + pos.h) {
         r.selectedBuilding = b.type;
         console.log(`[Tap] Building "${b.name}" selected (state=${b.state}, lv=${b.level})`);
+        r.selectedWorker = null;
         return;
+      }
+    }
+
+    // 4. 检查工人点击（世界空间，半径 15px）
+    for (const [workerId, vpos] of r.workerVisualPos) {
+      const dx = worldPos.x - vpos.x;
+      const dy = worldPos.y - vpos.y;
+      if (dx * dx + dy * dy < 225) {
+        const w = game.workers.workers.find(w => w.workerId === workerId);
+        if (w) {
+          r.selectedWorker = workerId;
+          r.selectedBuilding = null;
+          console.log(`[Tap] Worker "${w.name}" selected (state=${w.state}, health=${Math.floor(w.health)})`);
+          return;
+        }
       }
     }
 
     // 点击空白处取消选择
     r.selectedBuilding = null;
+    r.selectedWorker = null;
   }
 
   handleAction(btnIndex) {
