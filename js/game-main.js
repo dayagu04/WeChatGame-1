@@ -7,7 +7,7 @@ import './render';
 import { SAFE_TOP } from './render';
 import { BuildingType, BuildingState, ResourceType, WorkerState, EXPEDITION_CONFIGS, eventBus, GlobalEvents } from './game-constants';
 import { GameLoop } from './game-loop';
-import { GameRenderer } from './game-renderer';
+import { GameRenderer, LAYOUT } from './game-renderer';
 import { PersistenceManager } from './game-persistence';
 
 export default class GameMain {
@@ -82,15 +82,16 @@ export default class GameMain {
     const game = this.game;
     const r = this.renderer;
     const safeTop = r.safeTop;
+    const L = LAYOUT;
+    const SCENE_TOP_OFFSET = L.RESOURCE_BAR_H + L.WEATHER_BAR_H + 8;
 
     // 检查底部按钮点击（优先级更高）
-    const btnY = this.h - 55;
-    const btnW = (this.w - 40) / 4;
-    const btnGap = 5;
+    const btnY = this.h - L.BOTTOM_BAR_H;
+    const btnW = (this.w - L.BTN_LEFT_PAD - L.BTN_RIGHT_PAD - (L.BTN_COUNT - 1) * L.BTN_GAP) / L.BTN_COUNT;
 
-    if (y >= btnY + 8 && y <= btnY + 43) {
-      for (let i = 0; i < 4; i++) {
-        const bx = 10 + i * (btnW + btnGap);
+    if (y >= btnY + L.BTN_TOP_PAD && y <= btnY + L.BTN_TOP_PAD + L.BTN_H) {
+      for (let i = 0; i < L.BTN_COUNT; i++) {
+        const bx = L.BTN_LEFT_PAD + i * (btnW + L.BTN_GAP);
         if (x >= bx && x <= bx + btnW) {
           this.handleAction(i);
           return;
@@ -98,27 +99,22 @@ export default class GameMain {
       }
     }
 
-    // 检查建筑卡片点击（与 game-renderer.js 布局一致）
-    const SCENE_TOP_OFFSET = 96; // RESOURCE_BAR_H + WEATHER_BAR_H + 8
-    const BUILDING_COLS = 2;
-    const BUILDING_CARD_W = 150;
-    const BUILDING_CARD_H = 100;
-    const BUILDING_GAP = 12;
-
+    // 检查建筑卡片点击
+    const { BUILDING_COLS: COLS, BUILDING_CARD_W: CW, BUILDING_CARD_H: CH, BUILDING_GAP: GAP } = L;
     const sceneAreaTop = safeTop + SCENE_TOP_OFFSET;
-    const gridW = BUILDING_COLS * BUILDING_CARD_W + (BUILDING_COLS - 1) * BUILDING_GAP;
+    const gridW = COLS * CW + (COLS - 1) * GAP;
     const startX = (this.w - gridW) / 2;
     const startY = sceneAreaTop + 10 - r.scrollY;
     const buildings = game.buildings.getAll();
 
     for (let i = 0; i < buildings.length; i++) {
       const b = buildings[i];
-      const col = i % BUILDING_COLS;
-      const row = Math.floor(i / BUILDING_COLS);
-      const bx = startX + col * (BUILDING_CARD_W + BUILDING_GAP);
-      const by = startY + row * (BUILDING_CARD_H + BUILDING_GAP);
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+      const bx = startX + col * (CW + GAP);
+      const by = startY + row * (CH + GAP);
 
-      if (x >= bx && x <= bx + BUILDING_CARD_W && y >= by && y <= by + BUILDING_CARD_H) {
+      if (x >= bx && x <= bx + CW && y >= by && y <= by + CH) {
         r.selectedBuilding = b.type;
         console.log(`[Tap] Building "${b.name}" selected (state=${b.state}, lv=${b.level})`);
         return;

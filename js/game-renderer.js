@@ -39,16 +39,26 @@ const STATE_NAMES = {
   [BuildingState.FROZEN]: '🧊 冻结',
 };
 
-// 场景布局常量
-const RESOURCE_BAR_H = 60;
-const WEATHER_BAR_H = 28;
-const SCENE_TOP_OFFSET = RESOURCE_BAR_H + WEATHER_BAR_H + 8;
-const BOTTOM_BAR_H = 55;
-const BUILDING_COLS = 2;
-const BUILDING_CARD_W = 150;
-const BUILDING_CARD_H = 100;
-const BUILDING_GAP = 12;
-const GROUND_MARGIN = 30;
+// 场景布局常量（导出供 game-main.js 共享）
+export const LAYOUT = {
+  RESOURCE_BAR_H: 60,
+  WEATHER_BAR_H: 28,
+  BOTTOM_BAR_H: 55,
+  BUILDING_COLS: 2,
+  BUILDING_CARD_W: 150,
+  BUILDING_CARD_H: 100,
+  BUILDING_GAP: 12,
+  GROUND_MARGIN: 30,
+  // 按钮布局
+  BTN_LEFT_PAD: 10,
+  BTN_RIGHT_PAD: 10,
+  BTN_GAP: 5,
+  BTN_COUNT: 4,
+  BTN_TOP_PAD: 8,
+  BTN_H: 35,
+};
+
+const SCENE_TOP_OFFSET = LAYOUT.RESOURCE_BAR_H + LAYOUT.WEATHER_BAR_H + 8;
 
 export class GameRenderer {
   constructor(ctx, width, height, safeTop) {
@@ -58,7 +68,7 @@ export class GameRenderer {
     this.safeTop = safeTop || 0;
     this.selectedBuilding = null;
     this.scrollY = 0;
-    this.maxScrollY = 0;
+    this.maxScrollY = 500; // 合理默认值，首帧渲染后更新
 
     // 粒子系统
     this.particles = new ParticleSystem(width, height);
@@ -78,7 +88,7 @@ export class GameRenderer {
     // 计算场景布局
     const groundY = this.h * 0.42;
     const sceneAreaTop = this.safeTop + SCENE_TOP_OFFSET;
-    const sceneAreaBottom = this.h - BOTTOM_BAR_H;
+    const sceneAreaBottom = this.h - LAYOUT.BOTTOM_BAR_H;
     const sceneH = sceneAreaBottom - sceneAreaTop;
 
     ctx.clearRect(0, 0, this.w, this.h);
@@ -127,22 +137,23 @@ export class GameRenderer {
   drawBuildingScene(gameLoop, groundY, sceneAreaTop) {
     const ctx = this.ctx;
     const buildings = gameLoop.buildings.getAll();
-    const totalRows = Math.ceil(buildings.length / BUILDING_COLS);
-    const gridW = BUILDING_COLS * BUILDING_CARD_W + (BUILDING_COLS - 1) * BUILDING_GAP;
+    const { BUILDING_COLS: COLS, BUILDING_CARD_W: CW, BUILDING_CARD_H: CH, BUILDING_GAP: GAP, BOTTOM_BAR_H: BBH, GROUND_MARGIN: GM } = LAYOUT;
+    const totalRows = Math.ceil(buildings.length / COLS);
+    const gridW = COLS * CW + (COLS - 1) * GAP;
     const startX = (this.w - gridW) / 2;
     const startY = sceneAreaTop + 10 - this.scrollY;
 
     // 更新最大滚动
-    const contentH = totalRows * (BUILDING_CARD_H + BUILDING_GAP) + GROUND_MARGIN;
-    const sceneH = this.h - BOTTOM_BAR_H - sceneAreaTop;
+    const contentH = totalRows * (CH + GAP) + GM;
+    const sceneH = this.h - BBH - sceneAreaTop;
     this.maxScrollY = Math.max(0, contentH - sceneH);
 
     for (let i = 0; i < buildings.length; i++) {
       const b = buildings[i];
-      const col = i % BUILDING_COLS;
-      const row = Math.floor(i / BUILDING_COLS);
-      const bx = startX + col * (BUILDING_CARD_W + BUILDING_GAP);
-      const by = startY + row * (BUILDING_CARD_H + BUILDING_GAP);
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+      const bx = startX + col * (CW + GAP);
+      const by = startY + row * (CH + GAP);
 
       // 选中高亮
       const isSelected = this.selectedBuilding === b.type;
@@ -150,30 +161,28 @@ export class GameRenderer {
       // 建筑底座阴影
       ctx.fillStyle = 'rgba(0,0,0,0.2)';
       ctx.beginPath();
-      ctx.ellipse(bx + BUILDING_CARD_W / 2, by + BUILDING_CARD_H + 2, BUILDING_CARD_W / 2 - 5, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(bx + CW / 2, by + CH + 2, CW / 2 - 5, 4, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // 建筑精灵
       if (b.isUnlocked()) {
-        drawBuildingSprite(ctx, b.type, bx, by, BUILDING_CARD_W, BUILDING_CARD_H, b.state, b.level);
+        drawBuildingSprite(ctx, b.type, bx, by, CW, CH, b.state, b.level);
       } else {
-        // 锁定建筑：灰色轮廓
         ctx.strokeStyle = 'rgba(255,255,255,0.15)';
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 4]);
-        ctx.strokeRect(bx + 10, by + 10, BUILDING_CARD_W - 20, BUILDING_CARD_H - 20);
+        ctx.strokeRect(bx + 10, by + 10, CW - 20, CH - 20);
         ctx.setLineDash([]);
         ctx.fillStyle = '#666';
         ctx.font = '11px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('🔒 ' + b.name, bx + BUILDING_CARD_W / 2, by + BUILDING_CARD_H / 2 - 4);
-        // 建造费用
+        ctx.fillText('🔒 ' + b.name, bx + CW / 2, by + CH / 2 - 4);
         const cost = b.getUpgradeCost();
         const costType = Object.keys(cost)[0];
         const costVal = cost[costType];
         ctx.fillStyle = gameLoop.wallet.canAfford(cost) ? '#4ecdc4' : '#ff6b6b';
         ctx.font = '10px monospace';
-        ctx.fillText(`${costVal} ${costType.replace('RES_', '')}`, bx + BUILDING_CARD_W / 2, by + BUILDING_CARD_H / 2 + 12);
+        ctx.fillText(`${costVal} ${costType.replace('RES_', '')}`, bx + CW / 2, by + CH / 2 + 12);
         ctx.textAlign = 'left';
       }
 
@@ -181,36 +190,35 @@ export class GameRenderer {
       if (isSelected) {
         ctx.strokeStyle = '#6495ed';
         ctx.lineWidth = 2;
-        ctx.strokeRect(bx - 1, by - 1, BUILDING_CARD_W + 2, BUILDING_CARD_H + 2);
+        ctx.strokeRect(bx - 1, by - 1, CW + 2, CH + 2);
       }
 
       // 建筑名称标签
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(bx + 24, by + BUILDING_CARD_H - 18, BUILDING_CARD_W - 28, 16);
+      ctx.fillRect(bx + 24, by + CH - 18, CW - 28, 16);
       ctx.fillStyle = '#fff';
       ctx.font = '10px monospace';
       ctx.textAlign = 'center';
       const stateText = STATE_NAMES[b.state] || '';
-      ctx.fillText(`${b.emoji} ${b.name} ${stateText}`, bx + BUILDING_CARD_W / 2, by + BUILDING_CARD_H - 6);
+      ctx.fillText(`${b.emoji} ${b.name} ${stateText}`, bx + CW / 2, by + CH - 6);
       ctx.textAlign = 'left';
 
       // 升级进度条
       if (b.state === BuildingState.UPGRADING) {
         const elapsed = Date.now() - b.upgradeStartTimeMs;
         const pct = Math.min(1, elapsed / b.upgradeDurationMs);
-        drawExpeditionBar(ctx, bx + 8, by + BUILDING_CARD_H + 4, BUILDING_CARD_W - 16, pct, '升级中');
+        drawExpeditionBar(ctx, bx + 8, by + CH + 4, CW - 16, pct, '升级中');
       }
 
       // 分配工人数量指示
       if (b.isUnlocked() && b.maxSlots > 0) {
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(bx + BUILDING_CARD_W - 28, by + 2, 26, 14);
+        ctx.fillRect(bx + CW - 28, by + 2, 26, 14);
         ctx.fillStyle = '#fff';
         ctx.font = '9px monospace';
-        ctx.fillText(`👷${b.assignedWorkers.length}/${b.maxSlots}`, bx + BUILDING_CARD_W - 26, by + 12);
+        ctx.fillText(`👷${b.assignedWorkers.length}/${b.maxSlots}`, bx + CW - 26, by + 12);
       }
 
-      // 在建筑附近绘制分配的工人
       this.drawAssignedWorkers(gameLoop, b, bx, by);
     }
   }
@@ -227,7 +235,7 @@ export class GameRenderer {
     for (let i = 0; i < workers.length; i++) {
       const w = workers[i];
       const wx = bx + 20 + i * 22;
-      const wy = by + BUILDING_CARD_H - 4;
+      const wy = by + LAYOUT.BUILDING_CARD_H - 4;
       drawWorker(ctx, w, wx, wy, 0.8);
 
       // 健康状态条
@@ -255,7 +263,7 @@ export class GameRenderer {
     ];
 
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    roundRect(ctx, 4, y, this.w - 8, RESOURCE_BAR_H - 4, 6);
+    roundRect(ctx, 4, y, this.w - 8, LAYOUT.RESOURCE_BAR_H - 4, 6);
     ctx.fill();
 
     ctx.font = '11px monospace';
@@ -285,7 +293,7 @@ export class GameRenderer {
   // ---- 天气信息 ----
   drawWeatherInfo(gameLoop, effectiveTemp, warmth) {
     const ctx = this.ctx;
-    const y = this.safeTop + RESOURCE_BAR_H;
+    const y = this.safeTop + LAYOUT.RESOURCE_BAR_H;
     const w = gameLoop.weather;
     const emoji = WEATHER_EMOJI[w.currentWeather] || '☀️';
 
@@ -298,7 +306,7 @@ export class GameRenderer {
     const effStr = eff < 1 ? ` 效率${Math.floor(eff * 100)}%` : '';
 
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    roundRect(ctx, 4, y, this.w - 8, WEATHER_BAR_H, 4);
+    roundRect(ctx, 4, y, this.w - 8, LAYOUT.WEATHER_BAR_H, 4);
     ctx.fill();
 
     ctx.font = 'bold 12px monospace';
@@ -311,10 +319,12 @@ export class GameRenderer {
   // ---- 底部操作栏 ----
   drawBottomBar(gameLoop) {
     const ctx = this.ctx;
-    const y = this.h - BOTTOM_BAR_H;
+    const { BOTTOM_BAR_H: BBH, BTN_LEFT_PAD: BLP, BTN_RIGHT_PAD: BRP, BTN_GAP: BG,
+            BTN_COUNT: BC, BTN_TOP_PAD: BTP, BTN_H: BH } = LAYOUT;
+    const y = this.h - BBH;
 
     ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillRect(0, y, this.w, BOTTOM_BAR_H);
+    ctx.fillRect(0, y, this.w, BBH);
 
     const furnace = gameLoop.buildings.get(BuildingType.FURNACE);
     const btn3Label = furnace && furnace.state === BuildingState.FROZEN
@@ -338,24 +348,23 @@ export class GameRenderer {
       { label: btn3Label },
     ];
 
-    const btnW = (this.w - 40) / 4;
+    const btnW = (this.w - BLP - BRP - (BC - 1) * BG) / BC;
     ctx.font = 'bold 11px monospace';
 
     ctx.save();
     for (let i = 0; i < buttons.length; i++) {
-      const bx = 10 + i * (btnW + 5);
-      // 按钮背景
+      const bx = BLP + i * (btnW + BG);
       ctx.fillStyle = 'rgba(100,149,237,0.25)';
-      roundRect(ctx, bx, y + 8, btnW, 35, 6);
+      roundRect(ctx, bx, y + BTP, btnW, BH, 6);
       ctx.fill();
       ctx.strokeStyle = 'rgba(100,149,237,0.6)';
       ctx.lineWidth = 1;
-      roundRect(ctx, bx, y + 8, btnW, 35, 6);
+      roundRect(ctx, bx, y + BTP, btnW, BH, 6);
       ctx.stroke();
 
       ctx.fillStyle = '#fff';
       ctx.textAlign = 'center';
-      ctx.fillText(buttons[i].label, bx + btnW / 2, y + 30);
+      ctx.fillText(buttons[i].label, bx + btnW / 2, y + BTP + BH / 2 + 4);
     }
     ctx.restore();
   }

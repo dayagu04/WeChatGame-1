@@ -152,6 +152,9 @@ export class GameLoop {
             if (b.type === BuildingType.COOKHOUSE && added === 0 && output.amount > 0) {
               b.state = BuildingState.HALTED_NO_MATERIAL;
             }
+          } else if (b.type === BuildingType.COOKHOUSE) {
+            // 厨房没原料时进入停工
+            b.state = BuildingState.HALTED_NO_MATERIAL;
           }
         } else if (b.maxSlots > 0 && b.assignedWorkers.length === 0) {
           if (b.type !== BuildingType.FURNACE && b.type !== BuildingType.SHELTER) {
@@ -180,7 +183,7 @@ export class GameLoop {
     // Phase 7: 成就检查
     this.achievements.tick(this);
 
-    this.tickCount++;
+    // dayTicks 推进（tickCount 在 start() 中已递增）
     this.dayTicks = (this.dayTicks + 1) % this.dayLength;
   }
 
