@@ -633,27 +633,63 @@ export class GameRenderer {
   // ---- 小地图 ----
   drawMinimap(gameLoop, cam) {
     const ctx = this.ctx;
-    const mmW = 80, mmH = 40;
+    const mmW = 100, mmH = 50;
     const mmX = this.w - mmW - 8;
     const mmY = this.safeTop + HUD.RESOURCE_BAR_H + HUD.WEATHER_BAR_H + 4;
 
     // 小地图背景
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(mmX, mmY, mmW, mmH);
     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
     ctx.lineWidth = 1;
     ctx.strokeRect(mmX, mmY, mmW, mmH);
 
-    // 建筑点
+    // 暴风雪警告覆盖
+    if (gameLoop.weather.blizzardState === 'BLZ_ACTIVE') {
+      ctx.fillStyle = 'rgba(200,210,230,0.2)';
+      ctx.fillRect(mmX, mmY, mmW, mmH);
+    } else if (gameLoop.weather.blizzardState === 'BLZ_WARNING') {
+      const pulse = Math.sin(this.animTime * 4) * 0.5 + 0.5;
+      ctx.fillStyle = `rgba(255,100,100,${pulse * 0.15})`;
+      ctx.fillRect(mmX, mmY, mmW, mmH);
+    }
+
+    // 建筑点（解锁的和未解锁的分开显示）
     const buildings = gameLoop.buildings.getAll();
     for (const b of buildings) {
-      if (!b.isUnlocked()) continue;
       const pos = BUILDING_WORLD_POSITIONS[b.type];
       if (!pos) continue;
       const dotX = mmX + (pos.x / WORLD_W) * mmW;
       const dotY = mmY + (pos.y / WORLD_H) * mmH;
-      ctx.fillStyle = b.type === BuildingType.FURNACE ? '#ff6644' : '#4ecdc4';
-      ctx.fillRect(dotX - 1, dotY - 1, 3, 3);
+
+      if (b.isUnlocked()) {
+        // 已解锁建筑：根据状态着色
+        if (b.state === BuildingState.FROZEN) {
+          ctx.fillStyle = '#6688aa';
+        } else if (b.state === BuildingState.UPGRADING) {
+          ctx.fillStyle = '#ffaa00';
+        } else if (b.state === BuildingState.PRODUCING) {
+          ctx.fillStyle = b.type === BuildingType.FURNACE ? '#ff6644' : '#4ecdc4';
+        } else {
+          ctx.fillStyle = '#88aacc';
+        }
+        ctx.fillRect(dotX - 2, dotY - 2, 4, 4);
+      } else {
+        // 未解锁建筑：半透明
+        ctx.fillStyle = 'rgba(100,150,200,0.4)';
+        ctx.fillRect(dotX - 1, dotY - 1, 2, 2);
+      }
+    }
+
+    // 工人点
+    const workers = gameLoop.workers.getAlive();
+    for (const w of workers) {
+      const anchor = getBuildingAnchor(w.assignedBuilding);
+      const dotX = mmX + (anchor.x / WORLD_W) * mmW;
+      const dotY = mmY + (anchor.y / WORLD_H) * mmH;
+      ctx.fillStyle = w.state === WorkerState.SICK ? '#ff4444' :
+                      w.state === WorkerState.EXPLORING ? '#ffaa00' : '#ffffff';
+      ctx.fillRect(dotX - 1, dotY - 1, 2, 2);
     }
 
     // 相机视野框
@@ -664,6 +700,13 @@ export class GameRenderer {
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1;
     ctx.strokeRect(vpX, vpY, vpW, vpH);
+
+    // 小地图标签
+    ctx.font = '9px monospace';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.textAlign = 'right';
+    ctx.fillText('MAP', mmX + mmW - 3, mmY + 10);
+    ctx.textAlign = 'left';
   }
 
   // ---- 营地概览（工人统计） ----
