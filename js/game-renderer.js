@@ -96,6 +96,9 @@ export class GameRenderer {
       { text: '注意天气预报！\n暴风雪会带来严寒和煤炭消耗', highlight: 'weather' },
       { text: '保持工人健康和饱食\n营地士气影响生产效率', highlight: 'camp' },
     ];
+
+    // 资源运输动画队列
+    this.transportAnimations = [];
   }
 
   render(gameLoop) {
@@ -162,6 +165,9 @@ export class GameRenderer {
 
     // === 6. 工人 ===
     this.drawWorldWorkers(gameLoop, cam);
+
+    // === 6.5. 资源运输动画 ===
+    this.drawTransportAnimations(cam);
 
     // === 7. 天气粒子 ===
     this.particles.draw(ctx, gameLoop.weather);
@@ -431,6 +437,59 @@ export class GameRenderer {
         ctx.ellipse(sp.x + 3, sp.y - hop - 3, 2, 4, 0.3, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+  }
+
+  // ---- 资源运输动画 ----
+  addTransportAnimation(fromType, toType, resourceType, amount) {
+    const fromPos = BUILDING_WORLD_POSITIONS[fromType];
+    const toPos = BUILDING_WORLD_POSITIONS[toType];
+    if (!fromPos || !toPos) return;
+
+    this.transportAnimations.push({
+      fromX: fromPos.x + fromPos.w / 2,
+      fromY: fromPos.y + fromPos.h / 2,
+      toX: toPos.x + toPos.w / 2,
+      toY: toPos.y + toPos.h / 2,
+      resourceType,
+      amount,
+      startTime: Date.now(),
+      duration: 2000, // 2秒
+    });
+  }
+
+  drawTransportAnimations(cam) {
+    const ctx = this.ctx;
+    const now = Date.now();
+
+    this.transportAnimations = this.transportAnimations.filter(t => now - t.startTime < t.duration);
+
+    for (const t of this.transportAnimations) {
+      const progress = (now - t.startTime) / t.duration;
+      const worldX = t.fromX + (t.toX - t.fromX) * progress;
+      const worldY = t.fromY + (t.toY - t.fromY) * progress - Math.sin(progress * Math.PI) * 30; // 抛物线轨迹
+
+      const sp = cam.worldToScreen(worldX, worldY);
+      if (sp.x < -20 || sp.x > this.w + 20 || sp.y < -20 || sp.y > this.h + 20) continue;
+
+      const alpha = progress < 0.8 ? 1 : (1 - progress) / 0.2;
+      ctx.globalAlpha = alpha;
+
+      // 资源图标
+      const emoji = RES_EMOJI[t.resourceType] || '✨';
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(emoji, sp.x, sp.y);
+
+      // 数量
+      if (t.amount > 1) {
+        ctx.font = 'bold 10px monospace';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(`+${Math.floor(t.amount)}`, sp.x, sp.y + 12);
+      }
+
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = 1;
     }
   }
 

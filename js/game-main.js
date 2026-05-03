@@ -149,6 +149,11 @@ export default class GameMain {
         `+${Math.floor(data.amount)}${emoji}`,
         color,
       );
+
+      // 资源运输动画（从生产建筑到火炉）
+      if (data.buildingType !== BuildingType.FURNACE) {
+        r.addTransportAnimation(data.buildingType, BuildingType.FURNACE, data.resourceType, data.amount);
+      }
     });
 
     // 资源衰减浮动文字
