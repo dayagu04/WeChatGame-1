@@ -1253,22 +1253,46 @@ export function getBuildingAnchor(type) {
 }
 
 // 未解锁建筑绘制（世界空间）
-export function drawWorldLockedBuilding(ctx, x, y, w, h, name, cost, canAfford) {
-  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+export function drawWorldLockedBuilding(ctx, x, y, w, h, name, cost, canAfford, emoji) {
+  const t = Date.now() / 1000;
+
+  // 背景框
+  ctx.fillStyle = 'rgba(30,30,40,0.6)';
+  ctx.fillRect(x + 4, y + 4, w - 8, h - 8);
+
+  // 边框（虚线）
+  ctx.strokeStyle = canAfford ? `rgba(78,205,196,${0.4 + Math.sin(t * 3) * 0.2})` : 'rgba(255,255,255,0.2)';
   ctx.lineWidth = 1.5;
   ctx.setLineDash([6, 4]);
   ctx.strokeRect(x + 8, y + 8, w - 16, h - 16);
   ctx.setLineDash([]);
 
-  ctx.fillStyle = '#555';
+  // 建筑名称
+  ctx.fillStyle = '#778899';
   ctx.font = 'bold 12px monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('🔒 ' + name, x + w / 2, y + h / 2 - 6);
+  ctx.fillText('🔒 ' + name, x + w / 2, y + h / 2 - 10);
 
+  // 建筑描述（如果有emoji）
+  if (emoji) {
+    ctx.font = '20px sans-serif';
+    ctx.fillText(emoji, x + w / 2, y + h / 2 + 10);
+  }
+
+  // 费用
   const costType = Object.keys(cost)[0];
   const costVal = cost[costType];
   ctx.fillStyle = canAfford ? '#4ecdc4' : '#ff6b6b';
   ctx.font = '11px monospace';
-  ctx.fillText(`${costVal} ${costType.replace('RES_', '')}`, x + w / 2, y + h / 2 + 12);
+  ctx.fillText(`${costVal} ${costType.replace('RES_', '')}`, x + w / 2, y + h / 2 + 28);
+
+  // 可建造提示（脉冲效果）
+  if (canAfford) {
+    const pulse = Math.sin(t * 4) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(78,205,196,${pulse})`;
+    ctx.font = '10px monospace';
+    ctx.fillText('点击建造', x + w / 2, y + h - 8);
+  }
+
   ctx.textAlign = 'left';
 }

@@ -159,7 +159,7 @@ export class GameRenderer {
         }
       } else {
         drawWorldLockedBuilding(ctx, screenPos.x, screenPos.y, pos.w, pos.h,
-          b.name, b.getUpgradeCost(), gameLoop.wallet.canAfford(b.getUpgradeCost()));
+          b.name, b.getUpgradeCost(), gameLoop.wallet.canAfford(b.getUpgradeCost()), b.emoji);
       }
     }
 
