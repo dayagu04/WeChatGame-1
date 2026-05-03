@@ -138,6 +138,11 @@ export class GameRenderer {
       if (b.isUnlocked()) {
         drawWorldBuilding(ctx, b.type, screenPos.x, screenPos.y, pos.w, pos.h,
           b.state, b.level, b.name, b.emoji, isSelected);
+
+        // 升级动画：脚手架 + 粒子
+        if (b.state === BuildingState.UPGRADING) {
+          this.drawUpgradeEffect(ctx, screenPos.x, screenPos.y, pos.w, pos.h, b);
+        }
       } else {
         drawWorldLockedBuilding(ctx, screenPos.x, screenPos.y, pos.w, pos.h,
           b.name, b.getUpgradeCost(), gameLoop.wallet.canAfford(b.getUpgradeCost()));
@@ -596,6 +601,74 @@ export class GameRenderer {
       ctx.fillStyle = grad;
       ctx.fillRect(sp.x - pos.w * 0.3, sp.y - pos.h * 0.3, pos.w * 1.6, pos.h * 1.6);
     }
+  }
+
+  // ---- 升级动画效果 ----
+  drawUpgradeEffect(ctx, x, y, w, h, building) {
+    const t = this.animTime;
+    const elapsed = Date.now() - building.upgradeStartTimeMs;
+    const pct = Math.min(1, elapsed / building.upgradeDurationMs);
+
+    // 脚手架（竖条）
+    ctx.strokeStyle = 'rgba(139,119,101,0.6)';
+    ctx.lineWidth = 2;
+    // 左侧脚手架
+    ctx.beginPath();
+    ctx.moveTo(x + 4, y);
+    ctx.lineTo(x + 4, y + h);
+    ctx.moveTo(x + 12, y);
+    ctx.lineTo(x + 12, y + h);
+    ctx.moveTo(x + 4, y + h * 0.3);
+    ctx.lineTo(x + 12, y + h * 0.3);
+    ctx.moveTo(x + 4, y + h * 0.7);
+    ctx.lineTo(x + 12, y + h * 0.7);
+    ctx.stroke();
+    // 右侧脚手架
+    ctx.beginPath();
+    ctx.moveTo(x + w - 4, y);
+    ctx.lineTo(x + w - 4, y + h);
+    ctx.moveTo(x + w - 12, y);
+    ctx.lineTo(x + w - 12, y + h);
+    ctx.moveTo(x + w - 12, y + h * 0.3);
+    ctx.lineTo(x + w - 4, y + h * 0.3);
+    ctx.moveTo(x + w - 12, y + h * 0.7);
+    ctx.lineTo(x + w - 4, y + h * 0.7);
+    ctx.stroke();
+
+    // 锤子敲击动画
+    const hammerPhase = (t * 4) % 1;
+    if (hammerPhase < 0.3) {
+      const hx = x + w / 2 + Math.sin(t * 8) * 10;
+      const hy = y + 10;
+      ctx.fillStyle = '#888';
+      ctx.fillRect(hx - 3, hy - 8, 6, 8);
+      ctx.fillStyle = '#6b4226';
+      ctx.fillRect(hx - 1, hy, 2, 10);
+    }
+
+    // 建筑粉尘粒子
+    ctx.fillStyle = 'rgba(200,190,170,0.4)';
+    for (let i = 0; i < 6; i++) {
+      const px = x + 10 + Math.sin(t * 2 + i * 1.2) * (w / 2 - 10);
+      const py = y + h * 0.5 + Math.cos(t * 3 + i * 0.8) * (h * 0.3);
+      const size = 1.5 + Math.sin(t * 4 + i) * 0.5;
+      ctx.beginPath();
+      ctx.arc(px, py, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 进度条
+    const barW = w - 16;
+    const barY = y + h + 4;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(x + 8, barY, barW, 8);
+    ctx.fillStyle = '#ffd700';
+    ctx.fillRect(x + 8, barY, barW * pct, 8);
+    ctx.fillStyle = '#fff';
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${Math.floor(pct * 100)}%`, x + w / 2, barY + 7);
+    ctx.textAlign = 'left';
   }
 
   // ---- 建筑信息面板（选中时显示） ----
