@@ -476,9 +476,14 @@ export class GameRenderer {
     ctx.fillRect(0, y, this.w, H);
 
     const furnace = gameLoop.buildings.get(BuildingType.FURNACE);
-    const btn3Label = furnace && furnace.state === BuildingState.FROZEN
-      ? '🔥 重启火炉'
-      : (gameLoop.paused ? '▶️ 继续' : '⏸️ 暂停');
+    let btn3Label;
+    if (furnace && furnace.state === BuildingState.FROZEN) {
+      btn3Label = '🔥 重启火炉';
+    } else if (gameLoop.paused) {
+      btn3Label = '▶️ 继续';
+    } else {
+      btn3Label = `⏩ ${gameLoop.gameSpeed}x`;
+    }
 
     let btn0Label = '🔨 升级';
     let btn1Label = '👷 分配';

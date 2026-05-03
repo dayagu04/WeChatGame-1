@@ -233,15 +233,23 @@ export default class GameMain {
         }
         break;
 
-      case 3: // 火炉重启 / 暂停
+      case 3: // 火炉重启 / 速度切换
         {
           const furnace = game.buildings.get(BuildingType.FURNACE);
           if (furnace.state === BuildingState.FROZEN) {
             furnace.state = BuildingState.NORMAL;
+            r.addNotification('火炉已重新启动！', 'success');
             console.log('[Action] Furnace restarted');
+          } else if (game.paused) {
+            game.paused = false;
+            r.addNotification('游戏继续', 'info');
           } else {
-            game.paused = !game.paused;
-            console.log(`[Action] ${game.paused ? 'Paused' : 'Resumed'}`);
+            const spd = game.cycleSpeed();
+            if (spd === 1) {
+              r.addNotification('正常速度 (1x)', 'info');
+            } else {
+              r.addNotification(`加速 ${spd}x`, 'success');
+            }
           }
         }
         break;

@@ -32,6 +32,7 @@ export class GameLoop {
     this.lastSaveTs = Date.now();
     this.aniId = 0;
     this.paused = false;
+    this.gameSpeed = 1; // 1x, 2x, 3x
 
     // 随机事件状态
     this.activeTempBoost = 0;
@@ -67,14 +68,24 @@ export class GameLoop {
   start() {
     this.aniId = setInterval(() => {
       if (!this.paused) {
-        this.tickCount++;
-        eventBus.emit(GlobalEvents.TICK_UPDATE, {
-          currentTimestamp: Date.now(),
-          deltaMs: GAME_CONSTANTS.TICK_INTERVAL_MS,
-          tickCount: this.tickCount,
-        });
+        const ticks = this.gameSpeed;
+        for (let i = 0; i < ticks; i++) {
+          this.tickCount++;
+          eventBus.emit(GlobalEvents.TICK_UPDATE, {
+            currentTimestamp: Date.now(),
+            deltaMs: GAME_CONSTANTS.TICK_INTERVAL_MS,
+            tickCount: this.tickCount,
+          });
+        }
       }
     }, GAME_CONSTANTS.TICK_INTERVAL_MS);
+  }
+
+  cycleSpeed() {
+    if (this.gameSpeed === 1) this.gameSpeed = 2;
+    else if (this.gameSpeed === 2) this.gameSpeed = 3;
+    else this.gameSpeed = 1;
+    return this.gameSpeed;
   }
 
   stop() {
