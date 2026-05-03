@@ -173,7 +173,10 @@ export class GameRenderer {
     // === 10. 小地图 ===
     this.drawMinimap(gameLoop, cam);
 
-    // === 11. 建筑/工人信息面板 ===
+    // === 11. 营地概览 ===
+    this.drawCampOverview(gameLoop);
+
+    // === 12. 建筑/工人信息面板 ===
     if (this.selectedBuilding) {
       this.drawBuildingInfoPanel(gameLoop);
     }
@@ -555,6 +558,49 @@ export class GameRenderer {
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1;
     ctx.strokeRect(vpX, vpY, vpW, vpH);
+  }
+
+  // ---- 营地概览（工人统计） ----
+  drawCampOverview(gameLoop) {
+    const ctx = this.ctx;
+    const workers = gameLoop.workers.workers;
+    const alive = workers.filter(w => w.state !== WorkerState.DEAD);
+    const working = alive.filter(w => w.state === WorkerState.WORKING).length;
+    const idle = alive.filter(w => w.state === WorkerState.IDLE).length;
+    const sick = alive.filter(w => w.state === WorkerState.SICK || w.state === WorkerState.HEALING).length;
+    const exploring = alive.filter(w => w.state === WorkerState.EXPLORING).length;
+
+    const panelW = 90;
+    const panelH = 68;
+    const px = 8;
+    const py = this.h - HUD.BOTTOM_BAR_H - panelH - 4;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    roundRect(ctx, px, py, panelW, panelH, 6);
+    ctx.fill();
+
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    let ty = py + 14;
+
+    ctx.fillStyle = '#fff';
+    ctx.fillText(`👷 总人口: ${alive.length}`, px + 6, ty);
+    ty += 13;
+    ctx.fillStyle = '#4ecdc4';
+    ctx.fillText(`⚒️ 工作中: ${working}`, px + 6, ty);
+    ty += 13;
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`💤 空闲: ${idle}`, px + 6, ty);
+    ty += 13;
+    if (sick > 0) {
+      ctx.fillStyle = '#ff6b6b';
+      ctx.fillText(`🏥 生病: ${sick}`, px + 6, ty);
+      ty += 13;
+    }
+    if (exploring > 0) {
+      ctx.fillStyle = '#ffd700';
+      ctx.fillText(`🧭 探索: ${exploring}`, px + 6, ty);
+    }
   }
 
   // ---- 日夜遮罩 ----
