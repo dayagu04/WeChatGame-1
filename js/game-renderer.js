@@ -150,7 +150,11 @@ export class GameRenderer {
     // === 7. 天气粒子 ===
     this.particles.draw(ctx, gameLoop.weather);
 
-    // === 8. 暴风雪遮罩 ===
+    // === 8. 日夜循环遮罩 ===
+    const timeOfDay = gameLoop.getTimeOfDay();
+    this.drawDayNightOverlay(ctx, timeOfDay, gameLoop);
+
+    // === 9. 暴风雪遮罩 ===
     if (gameLoop.weather.blizzardState === 'BLZ_ACTIVE') {
       ctx.fillStyle = 'rgba(200,210,230,0.1)';
       ctx.fillRect(0, 0, this.w, this.h);
@@ -538,6 +542,60 @@ export class GameRenderer {
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1;
     ctx.strokeRect(vpX, vpY, vpW, vpH);
+  }
+
+  // ---- 日夜遮罩 ----
+  drawDayNightOverlay(ctx, timeOfDay, gameLoop) {
+    // 计算夜晚强度（0=白天，1=深夜）
+    let nightAlpha = 0;
+    if (timeOfDay < 0.2 || timeOfDay > 0.85) {
+      nightAlpha = 0.35; // 深夜
+    } else if (timeOfDay < 0.3) {
+      nightAlpha = 0.35 * (1 - (timeOfDay - 0.2) / 0.1); // 黎明过渡
+    } else if (timeOfDay > 0.7) {
+      nightAlpha = 0.35 * ((timeOfDay - 0.7) / 0.15); // 黄昏过渡
+    }
+
+    if (nightAlpha <= 0) return;
+
+    // 夜晚遮罩
+    ctx.fillStyle = `rgba(10,15,30,${nightAlpha})`;
+    ctx.fillRect(0, 0, this.w, this.h);
+
+    // 建筑窗户灯光（在夜晚时发光）
+    const cam = this.camera;
+    const buildings = gameLoop.buildings.getAll();
+    for (const b of buildings) {
+      if (!b.isUnlocked()) continue;
+      if (b.state === BuildingState.FROZEN || b.state === BuildingState.LOCKED) continue;
+
+      const pos = BUILDING_WORLD_POSITIONS[b.type];
+      if (!pos) continue;
+      const sp = cam.worldToScreen(pos.x, pos.y);
+      if (sp.x + pos.w < 0 || sp.x > this.w) continue;
+
+      // 窗户光芒
+      const glowAlpha = nightAlpha * 0.6 * (0.8 + Math.sin(this.animTime * 1.5) * 0.2);
+      const windowColor = b.type === BuildingType.FURNACE
+        ? `rgba(255,150,50,${glowAlpha})`
+        : `rgba(255,220,120,${glowAlpha * 0.7})`;
+
+      // 画两个小窗户
+      const wy = sp.y + pos.h * 0.3;
+      ctx.fillStyle = windowColor;
+      ctx.fillRect(sp.x + pos.w * 0.2, wy, 8, 6);
+      ctx.fillRect(sp.x + pos.w * 0.6, wy, 8, 6);
+
+      // 灯光扩散光晕
+      const grad = ctx.createRadialGradient(
+        sp.x + pos.w / 2, sp.y + pos.h / 2, 0,
+        sp.x + pos.w / 2, sp.y + pos.h / 2, pos.w * 0.8,
+      );
+      grad.addColorStop(0, `rgba(255,200,100,${glowAlpha * 0.15})`);
+      grad.addColorStop(1, 'rgba(255,200,100,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(sp.x - pos.w * 0.3, sp.y - pos.h * 0.3, pos.w * 1.6, pos.h * 1.6);
+    }
   }
 
   // ---- 建筑信息面板（选中时显示） ----
