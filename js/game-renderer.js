@@ -1229,6 +1229,23 @@ export class GameRenderer {
       const b = gameLoop.buildings.get(w.assignedBuilding);
       ctx.fillStyle = '#888';
       ctx.fillText(`分配至: ${b ? b.name : w.assignedBuilding}`, px + 10, ty);
+      ty += 14;
+    }
+
+    // 工人效率
+    if (w.state === 'WK_WORKING') {
+      const eff = gameLoop.getWorkerEfficiency();
+      ctx.fillStyle = eff >= 1 ? '#4ecdc4' : '#ffaa00';
+      ctx.fillText(`效率: ${Math.floor(eff * 100)}%`, px + 10, ty);
+      ty += 14;
+    }
+
+    // 生病剩余时间
+    if (w.state === 'WK_SICK' && w.sickTimestampMs > 0) {
+      const elapsed = Date.now() - w.sickTimestampMs;
+      const remaining = Math.max(0, 60000 - elapsed); // 假设60秒恢复
+      ctx.fillStyle = '#ff6b6b';
+      ctx.fillText(`恢复: ${Math.ceil(remaining / 1000)}秒`, px + 10, ty);
     }
   }
 }
