@@ -274,7 +274,6 @@ export class GameRenderer {
       ctx.globalAlpha = 1;
     }
   }
-  }
 
   // ---- 世界环境效果 ----
   drawWorldAmbientEffects(gameLoop, cam) {
