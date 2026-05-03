@@ -478,16 +478,24 @@ export class GameRenderer {
       ? '🔥 重启火炉'
       : (gameLoop.paused ? '▶️ 继续' : '⏸️ 暂停');
 
+    let btn1Label = '👷 分配';
     let btn2Label = '🧭 探索';
     if (this.selectedBuilding) {
       const sel = gameLoop.buildings.get(this.selectedBuilding);
-      if (sel && !sel.isUnlocked()) btn2Label = '🏗️ 建造';
-      else if (sel && sel.isUnlocked()) btn2Label = '👷 分配';
+      if (sel && !sel.isUnlocked()) {
+        btn2Label = '🏗️ 建造';
+      } else if (sel && sel.isUnlocked()) {
+        btn2Label = '👷 分配';
+        // 如果建筑满员，按钮1变为卸任
+        if (sel.maxSlots > 0 && sel.assignedWorkers.length >= sel.maxSlots) {
+          btn1Label = '↩️ 卸任';
+        }
+      }
     }
 
     const buttons = [
       { label: '🔨 升级' },
-      { label: '👷 分配' },
+      { label: btn1Label },
       { label: btn2Label },
       { label: btn3Label },
     ];

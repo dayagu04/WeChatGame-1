@@ -210,8 +210,17 @@ export default class GameMain {
         this.doUpgrade(selected);
         break;
 
-      case 1: // 分配工人
-        this.doAssign(selected);
+      case 1: // 分配/卸任工人
+        if (selected) {
+          const b = game.buildings.get(selected);
+          if (b && b.isUnlocked() && b.assignedWorkers.length >= b.maxSlots && b.maxSlots > 0) {
+            this.doUnassign(selected);
+          } else {
+            this.doAssign(selected);
+          }
+        } else {
+          this.doAssign(selected);
+        }
         break;
 
       case 2: // 智能操作
@@ -299,6 +308,27 @@ export default class GameMain {
     b.assignedWorkers.push(idle.workerId);
     if (b.state === BuildingState.NORMAL) b.state = BuildingState.PRODUCING;
     console.log(`[Action:Assign] SUCCESS: ${idle.name} -> ${b.name} (${b.assignedWorkers.length}/${b.maxSlots})`);
+  }
+
+  doUnassign(selected) {
+    const game = this.game;
+    if (!selected) return;
+    const b = game.buildings.get(selected);
+    if (!b || !b.isUnlocked() || b.assignedWorkers.length === 0) return;
+
+    // 移除最后分配的工人
+    const workerId = b.assignedWorkers.pop();
+    const w = game.workers.workers.find(w => w.workerId === workerId);
+    if (w) {
+      w.state = WorkerState.IDLE;
+      w.assignedBuilding = null;
+      console.log(`[Action:Unassign] SUCCESS: ${w.name} <- ${b.name} (${b.assignedWorkers.length}/${b.maxSlots})`);
+    }
+
+    // 如果没有工人了，建筑停止生产
+    if (b.assignedWorkers.length === 0 && b.state === BuildingState.PRODUCING) {
+      b.state = BuildingState.HALTED_NO_WORKER;
+    }
   }
 
   doExplore() {
