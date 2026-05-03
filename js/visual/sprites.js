@@ -762,3 +762,384 @@ export function drawExpeditionBar(ctx, x, y, w, pct, name) {
   ctx.fillText(name, x + w / 2, y + 8);
   ctx.textAlign = 'left';
 }
+
+// ==========================================
+// 世界空间渲染（LOL 风格大地图）
+// ==========================================
+
+// 世界地面渲染（相机空间）
+export function drawWorldGround(ctx, camX, camY, screenW, screenH, worldH, horizonY) {
+  // 地面渐变（从地平线向下）
+  const grad = ctx.createLinearGradient(0, horizonY, 0, screenH);
+  grad.addColorStop(0, '#c8cad0');
+  grad.addColorStop(0.15, '#d8dae0');
+  grad.addColorStop(0.5, '#e0e2e8');
+  grad.addColorStop(1, '#d0d2d8');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, horizonY, screenW, screenH - horizonY);
+
+  // 雪地纹理点
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  for (let i = 0; i < 40; i++) {
+    const wx = (i * 67 + 23) % 2400;
+    const wy = (i * 43 + 17) % (worldH - horizonY) + horizonY;
+    const sx = wx - camX;
+    const sy = wy - camY;
+    if (sx < -20 || sx > screenW + 20 || sy < horizonY || sy > screenH + 20) continue;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, 6 + (i % 5) * 2, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 路径（连接建筑的雪地小路）
+  ctx.strokeStyle = 'rgba(180,180,190,0.4)';
+  ctx.lineWidth = 12;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const paths = [
+    [[600, 580], [900, 600]],   // 火炉→伐木场
+    [[900, 600], [1100, 650]],  // 伐木场→煤矿
+    [[1200, 560], [1500, 620]], // 火炉→猎人小屋
+    [[1500, 620], [1700, 590]], // 猎人小屋→厨房
+    [[1200, 560], [1400, 680]], // 火炉→庇护所
+    [[1700, 590], [1900, 640]], // 厨房→医疗站
+    [[1900, 640], [2100, 610]], // 医疗站→研究工坊
+    [[2100, 610], [2200, 660]], // 研究工坊→交易站
+  ];
+  for (const [p1, p2] of paths) {
+    const s1x = p1[0] - camX, s1y = p1[1] - camY;
+    const s2x = p2[0] - camX, s2y = p2[1] - camY;
+    // 只画在屏幕范围内的路径
+    if (Math.max(s1x, s2x) < -50 || Math.min(s1x, s2x) > screenW + 50) continue;
+    if (Math.max(s1y, s2y) < -50 || Math.min(s1y, s2y) > screenH + 50) continue;
+    ctx.beginPath();
+    ctx.moveTo(s1x, s1y);
+    ctx.lineTo(s2x, s2y);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'butt';
+}
+
+// 装饰性树木
+const WORLD_TREES = [];
+function getWorldTrees() {
+  if (WORLD_TREES.length > 0) return WORLD_TREES;
+  const positions = [
+    [100, 520], [200, 540], [350, 500], [480, 530],
+    [700, 510], [850, 550], [1050, 530], [1300, 510],
+    [1600, 500], [1850, 540], [2050, 520], [2300, 550],
+    [150, 570], [400, 590], [750, 570], [1150, 590],
+    [1450, 570], [1750, 600], [2000, 580], [2350, 570],
+  ];
+  for (const [x, y] of positions) {
+    WORLD_TREES.push({
+      x, y,
+      height: 25 + Math.random() * 20,
+      width: 12 + Math.random() * 8,
+      snow: 0.3 + Math.random() * 0.4,
+    });
+  }
+  return WORLD_TREES;
+}
+
+export function drawWorldTrees(ctx, camX, camY, screenW, screenH) {
+  const trees = getWorldTrees();
+  for (const t of trees) {
+    const sx = t.x - camX;
+    const sy = t.y - camY;
+    if (sx < -40 || sx > screenW + 40 || sy < -60 || sy > screenH + 20) continue;
+
+    // 树干
+    ctx.fillStyle = '#5a3a1a';
+    ctx.fillRect(sx - 2, sy - t.height, 4, t.height * 0.4);
+
+    // 树冠（三角形，带雪）
+    ctx.fillStyle = '#2a5a2a';
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - t.height);
+    ctx.lineTo(sx - t.width / 2, sy - t.height * 0.3);
+    ctx.lineTo(sx + t.width / 2, sy - t.height * 0.3);
+    ctx.closePath();
+    ctx.fill();
+
+    // 雪顶
+    ctx.fillStyle = `rgba(220,230,240,${t.snow})`;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - t.height);
+    ctx.lineTo(sx - t.width * 0.3, sy - t.height * 0.6);
+    ctx.lineTo(sx + t.width * 0.3, sy - t.height * 0.6);
+    ctx.closePath();
+    ctx.fill();
+
+    // 第二层树冠
+    ctx.fillStyle = '#1a4a1a';
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - t.height * 0.7);
+    ctx.lineTo(sx - t.width * 0.6, sy - t.height * 0.15);
+    ctx.lineTo(sx + t.width * 0.6, sy - t.height * 0.15);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// 岩石装饰
+const WORLD_ROCKS = [];
+function getWorldRocks() {
+  if (WORLD_ROCKS.length > 0) return WORLD_ROCKS;
+  const positions = [
+    [300, 560], [500, 610], [800, 590], [1200, 620],
+    [1600, 610], [1900, 650], [2200, 600], [250, 540],
+  ];
+  for (const [x, y] of positions) {
+    WORLD_ROCKS.push({
+      x, y,
+      w: 10 + Math.random() * 15,
+      h: 6 + Math.random() * 8,
+      shade: Math.random() * 0.3,
+    });
+  }
+  return WORLD_ROCKS;
+}
+
+export function drawWorldRocks(ctx, camX, camY, screenW, screenH) {
+  const rocks = getWorldRocks();
+  for (const r of rocks) {
+    const sx = r.x - camX;
+    const sy = r.y - camY;
+    if (sx < -30 || sx > screenW + 30 || sy < -20 || sy > screenH + 10) continue;
+
+    ctx.fillStyle = `rgb(${130 + r.shade * 40},${130 + r.shade * 40},${135 + r.shade * 40})`;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, r.w, r.h, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 雪覆盖
+    ctx.fillStyle = 'rgba(230,235,240,0.5)';
+    ctx.beginPath();
+    ctx.ellipse(sx, sy - r.h * 0.3, r.w * 0.8, r.h * 0.4, 0, Math.PI, 0);
+    ctx.fill();
+  }
+}
+
+// 世界空间建筑绘制（带名牌和选中高亮）
+export function drawWorldBuilding(ctx, type, x, y, w, h, state, level, name, emoji, isSelected) {
+  // 阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath();
+  ctx.ellipse(x + w / 2, y + h + 2, w / 2 + 5, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 建筑本体
+  drawBuildingSprite(ctx, type, x, y, w, h, state, level);
+
+  // 选中高亮
+  if (isSelected) {
+    ctx.strokeStyle = '#6495ed';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
+
+    // 选中光晕
+    ctx.shadowColor = '#6495ed';
+    ctx.shadowBlur = 10;
+    ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
+    ctx.shadowBlur = 0;
+  }
+
+  // 名牌（建筑名 + 状态）
+  const STATE_LABELS = {
+    0: '🔒', 1: '✅', 2: '🔨', 3: '⚙️',
+    4: '❌缺人', 5: '❌缺料', 6: '🧊',
+  };
+  const label = STATE_LABELS[state] || '';
+  const nameText = `${emoji} ${name} ${label}`;
+  ctx.font = 'bold 11px monospace';
+  const tw = ctx.measureText(nameText).width;
+  const px = x + w / 2;
+  const py = y - 10;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  roundRectPath(ctx, px - tw / 2 - 4, py - 10, tw + 8, 16, 4);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.fillText(nameText, px, py + 2);
+  ctx.textAlign = 'left';
+
+  // 等级角标
+  if (level > 0) {
+    drawLevelBadge(ctx, x, y, level);
+  }
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// 世界空间工人绘制（带行走动画）
+export function drawWorldWorker(ctx, worker, x, y, targetX, targetY) {
+  const isWalking = targetX !== null && targetY !== null &&
+    (Math.abs(x - targetX) > 2 || Math.abs(y - targetY) > 2);
+  const t = Date.now() / 1000;
+  const s = 1.2; // 世界空间工人缩放
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+
+  // 朝向（根据移动方向翻转）
+  if (isWalking && targetX < x) ctx.scale(-1, 1);
+
+  switch (worker.state) {
+    case WorkerState.WORKING:
+      if (isWalking) drawWalkingWorker(ctx, t);
+      else drawWorkingWorker(ctx, t);
+      break;
+    case WorkerState.SICK:
+      drawSickWorker(ctx, t);
+      break;
+    case WorkerState.HEALING:
+      drawHealingWorker(ctx, t);
+      break;
+    case WorkerState.EXPLORING:
+      drawExploringWorker(ctx, t);
+      break;
+    case WorkerState.DEAD:
+      drawDeadWorker(ctx);
+      break;
+    default:
+      if (isWalking) drawWalkingWorker(ctx, t);
+      else drawIdleWorker(ctx, t);
+  }
+
+  ctx.restore();
+
+  // 名字标签
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.font = '9px monospace';
+  const nw = ctx.measureText(worker.name).width;
+  roundRectPath(ctx, x - nw / 2 - 2, y + 16, nw + 4, 12, 3);
+  ctx.fill();
+  ctx.fillStyle = '#ddd';
+  ctx.textAlign = 'center';
+  ctx.fillText(worker.name, x, y + 25);
+  ctx.textAlign = 'left';
+}
+
+function drawWalkingWorker(ctx, t) {
+  const walk = Math.sin(t * 8) * 4;
+  drawWorkerBody(ctx, '#5a6a8a', '#e8c090');
+  // 行走的腿
+  ctx.strokeStyle = '#5a6a8a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-2, 10);
+  ctx.lineTo(-2 + walk, 16);
+  ctx.moveTo(2, 10);
+  ctx.lineTo(2 - walk, 16);
+  ctx.stroke();
+  // 摆臂
+  ctx.beginPath();
+  ctx.moveTo(-4, 2);
+  ctx.lineTo(-6 - walk, 8);
+  ctx.moveTo(4, 2);
+  ctx.lineTo(6 + walk, 8);
+  ctx.stroke();
+}
+
+function drawWalkingWorkerFn(ctx, t) {
+  const walk = Math.sin(t * 8) * 4;
+  drawWorkerBody(ctx, '#5a6a8a', '#e8c090');
+  ctx.strokeStyle = '#5a6a8a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-2, 10);
+  ctx.lineTo(-2 + walk, 16);
+  ctx.moveTo(2, 10);
+  ctx.lineTo(2 - walk, 16);
+  ctx.stroke();
+}
+
+// 远景山脉（视差滚动）
+export function drawWorldMountains(ctx, camX, screenW, horizonY) {
+  const parallax = camX * 0.1; // 远景慢速视差
+
+  ctx.fillStyle = '#1a2a3a';
+  ctx.beginPath();
+  ctx.moveTo(0, horizonY);
+  const peaks = [
+    [0.05, -70], [0.12, -40], [0.22, -90], [0.35, -50],
+    [0.45, -80], [0.55, -35], [0.65, -75], [0.78, -45],
+    [0.88, -65], [0.95, -30],
+  ];
+  for (const [px, py] of peaks) {
+    const sx = (px * screenW * 2 - parallax) % (screenW * 2);
+    ctx.lineTo(sx, horizonY + py);
+  }
+  ctx.lineTo(screenW, horizonY);
+  ctx.closePath();
+  ctx.fill();
+
+  // 雪顶
+  ctx.fillStyle = 'rgba(200,210,220,0.35)';
+  for (const [px, py] of peaks) {
+    if (py > -50) continue;
+    const sx = (px * screenW * 2 - parallax) % (screenW * 2);
+    ctx.beginPath();
+    ctx.moveTo(sx - 8, horizonY + py + 10);
+    ctx.lineTo(sx, horizonY + py);
+    ctx.lineTo(sx + 8, horizonY + py + 10);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// 建筑世界位置配置
+export const BUILDING_WORLD_POSITIONS = {
+  'BLD_FURNACE':      { x: 550,  y: 540, w: 130, h: 100 },
+  'BLD_LUMBER_CAMP':  { x: 830,  y: 560, w: 110, h: 85 },
+  'BLD_COAL_MINE':    { x: 1050, y: 580, w: 110, h: 85 },
+  'BLD_HUNTER_HUT':   { x: 1350, y: 550, w: 100, h: 80 },
+  'BLD_COOKHOUSE':    { x: 1550, y: 570, w: 100, h: 80 },
+  'BLD_CLINIC':       { x: 1750, y: 590, w: 100, h: 80 },
+  'BLD_SHELTER':      { x: 1300, y: 630, w: 100, h: 80 },
+  'BLD_WORKSHOP':     { x: 1950, y: 570, w: 100, h: 80 },
+  'BLD_TRADING_POST': { x: 2100, y: 610, w: 100, h: 80 },
+};
+
+// 获取建筑在世界中的锚点（底部中心，用于工人站位）
+export function getBuildingAnchor(type) {
+  const pos = BUILDING_WORLD_POSITIONS[type];
+  if (!pos) return { x: 600, y: 600 };
+  return { x: pos.x + pos.w / 2, y: pos.y + pos.h + 5 };
+}
+
+// 未解锁建筑绘制（世界空间）
+export function drawWorldLockedBuilding(ctx, x, y, w, h, name, cost, canAfford) {
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(x + 8, y + 8, w - 16, h - 16);
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = '#555';
+  ctx.font = 'bold 12px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('🔒 ' + name, x + w / 2, y + h / 2 - 6);
+
+  const costType = Object.keys(cost)[0];
+  const costVal = cost[costType];
+  ctx.fillStyle = canAfford ? '#4ecdc4' : '#ff6b6b';
+  ctx.font = '11px monospace';
+  ctx.fillText(`${costVal} ${costType.replace('RES_', '')}`, x + w / 2, y + h / 2 + 12);
+  ctx.textAlign = 'left';
+}

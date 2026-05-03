@@ -94,6 +94,7 @@ import { ResearchManager } from '../js/game-research.js';
 import { TradingManager } from '../js/game-trading.js';
 import { AchievementManager } from '../js/game-achievements.js';
 import { PersistenceManager } from '../js/game-persistence.js';
+import { Camera } from '../js/visual/camera.js';
 
 // ==========================================
 // 测试用例
@@ -477,90 +478,148 @@ describe('停工自动恢复', () => {
   });
 });
 
-describe('点击区域计算 - LAYOUT 常量一致性', () => {
-  // 使用与 game-renderer.js 相同的 LAYOUT 常量
-  const LAYOUT = {
-    RESOURCE_BAR_H: 60, WEATHER_BAR_H: 28, BOTTOM_BAR_H: 55,
-    BUILDING_COLS: 2, BUILDING_CARD_W: 150, BUILDING_CARD_H: 100,
-    BUILDING_GAP: 12, GROUND_MARGIN: 30,
-    BTN_LEFT_PAD: 10, BTN_RIGHT_PAD: 10, BTN_GAP: 5,
-    BTN_COUNT: 4, BTN_TOP_PAD: 8, BTN_H: 35,
+describe('点击区域计算 - HUD 常量与世界空间', () => {
+  // HUD 常量（屏幕空间，用于按钮和顶部栏）
+  const HUD = {
+    RESOURCE_BAR_H: 56, WEATHER_BAR_H: 26, BOTTOM_BAR_H: 50,
+    BTN_LEFT_PAD: 8, BTN_RIGHT_PAD: 8, BTN_GAP: 4,
+    BTN_COUNT: 4, BTN_TOP_PAD: 6, BTN_H: 34,
   };
-  const SCENE_TOP_OFFSET = LAYOUT.RESOURCE_BAR_H + LAYOUT.WEATHER_BAR_H + 8;
 
   it('按钮宽度计算应该一致（renderer vs hit-test）', () => {
     const W = 375;
-    // renderer 公式
-    const rendererBtnW = (W - LAYOUT.BTN_LEFT_PAD - LAYOUT.BTN_RIGHT_PAD
-      - (LAYOUT.BTN_COUNT - 1) * LAYOUT.BTN_GAP) / LAYOUT.BTN_COUNT;
-    // hit-test 公式（相同）
-    const hitBtnW = (W - LAYOUT.BTN_LEFT_PAD - LAYOUT.BTN_RIGHT_PAD
-      - (LAYOUT.BTN_COUNT - 1) * LAYOUT.BTN_GAP) / LAYOUT.BTN_COUNT;
+    const rendererBtnW = (W - HUD.BTN_LEFT_PAD - HUD.BTN_RIGHT_PAD
+      - (HUD.BTN_COUNT - 1) * HUD.BTN_GAP) / HUD.BTN_COUNT;
+    const hitBtnW = (W - HUD.BTN_LEFT_PAD - HUD.BTN_RIGHT_PAD
+      - (HUD.BTN_COUNT - 1) * HUD.BTN_GAP) / HUD.BTN_COUNT;
     expect(rendererBtnW).toBe(hitBtnW);
   });
 
   it('按钮不应该超出屏幕右边缘', () => {
     const W = 375;
-    const btnW = (W - LAYOUT.BTN_LEFT_PAD - LAYOUT.BTN_RIGHT_PAD
-      - (LAYOUT.BTN_COUNT - 1) * LAYOUT.BTN_GAP) / LAYOUT.BTN_COUNT;
-    const lastBtnX = LAYOUT.BTN_LEFT_PAD + (LAYOUT.BTN_COUNT - 1) * (btnW + LAYOUT.BTN_GAP);
+    const btnW = (W - HUD.BTN_LEFT_PAD - HUD.BTN_RIGHT_PAD
+      - (HUD.BTN_COUNT - 1) * HUD.BTN_GAP) / HUD.BTN_COUNT;
+    const lastBtnX = HUD.BTN_LEFT_PAD + (HUD.BTN_COUNT - 1) * (btnW + HUD.BTN_GAP);
     const rightEdge = lastBtnX + btnW;
     expect(rightEdge).toBeLessThanOrEqual(W);
   });
 
   it('所有按钮中心都应该在 hit-test 范围内', () => {
     const W = 375, H = 667;
-    const btnY = H - LAYOUT.BOTTOM_BAR_H;
-    const btnW = (W - LAYOUT.BTN_LEFT_PAD - LAYOUT.BTN_RIGHT_PAD
-      - (LAYOUT.BTN_COUNT - 1) * LAYOUT.BTN_GAP) / LAYOUT.BTN_COUNT;
+    const btnY = H - HUD.BOTTOM_BAR_H;
+    const btnW = (W - HUD.BTN_LEFT_PAD - HUD.BTN_RIGHT_PAD
+      - (HUD.BTN_COUNT - 1) * HUD.BTN_GAP) / HUD.BTN_COUNT;
 
-    for (let i = 0; i < LAYOUT.BTN_COUNT; i++) {
-      const bx = LAYOUT.BTN_LEFT_PAD + i * (btnW + LAYOUT.BTN_GAP);
+    for (let i = 0; i < HUD.BTN_COUNT; i++) {
+      const bx = HUD.BTN_LEFT_PAD + i * (btnW + HUD.BTN_GAP);
       const cx = bx + btnW / 2;
-      const cy = btnY + LAYOUT.BTN_TOP_PAD + LAYOUT.BTN_H / 2;
-      // X 命中
+      const cy = btnY + HUD.BTN_TOP_PAD + HUD.BTN_H / 2;
       expect(cx >= bx).toBeTruthy();
       expect(cx <= bx + btnW).toBeTruthy();
-      // Y 命中
-      expect(cy >= btnY + LAYOUT.BTN_TOP_PAD).toBeTruthy();
-      expect(cy <= btnY + LAYOUT.BTN_TOP_PAD + LAYOUT.BTN_H).toBeTruthy();
+      expect(cy >= btnY + HUD.BTN_TOP_PAD).toBeTruthy();
+      expect(cy <= btnY + HUD.BTN_TOP_PAD + HUD.BTN_H).toBeTruthy();
     }
   });
 
-  it('建筑网格应该居中且不超出屏幕', () => {
-    const W = 375;
-    const gridW = LAYOUT.BUILDING_COLS * LAYOUT.BUILDING_CARD_W
-      + (LAYOUT.BUILDING_COLS - 1) * LAYOUT.BUILDING_GAP;
-    const startX = (W - gridW) / 2;
-    expect(startX).toBeGreaterThan(0);
-    expect(startX + gridW).toBeLessThanOrEqual(W);
+  it('HUD 常量值应该正确', () => {
+    expect(HUD.BTN_LEFT_PAD).toBe(8);
+    expect(HUD.BTN_RIGHT_PAD).toBe(8);
+    expect(HUD.BTN_GAP).toBe(4);
+    expect(HUD.BTN_COUNT).toBe(4);
+    expect(HUD.BTN_TOP_PAD).toBe(6);
+    expect(HUD.BTN_H).toBe(34);
+    expect(HUD.BOTTOM_BAR_H).toBe(50);
   });
 
-  it('建筑卡片底部不应该侵入底部按钮区域', () => {
-    const W = 375, H = 667, safeTop = 44;
-    const sceneAreaTop = safeTop + SCENE_TOP_OFFSET;
-    const buildings = 9; // 当前建筑数量
-    const totalRows = Math.ceil(buildings / LAYOUT.BUILDING_COLS);
-    const startY = sceneAreaTop + 10;
-    const lastRowBottom = startY + (totalRows - 1) * (LAYOUT.BUILDING_CARD_H + LAYOUT.BUILDING_GAP)
-      + LAYOUT.BUILDING_CARD_H;
-    const btnAreaTop = H - LAYOUT.BOTTOM_BAR_H;
-    // 即使不滚动，建筑也不应侵入按钮区
-    // （可能需要滚动，但 maxScrollY 应确保可滚动到）
-    expect(lastRowBottom - btnAreaTop).toBeLessThanOrEqual(500); // maxScrollY 足够
+  it('建筑世界位置应该覆盖所有建筑类型', () => {
+    const positions = {
+      'BLD_FURNACE': { x: 550, y: 540, w: 130, h: 100 },
+      'BLD_LUMBER_CAMP': { x: 830, y: 560, w: 110, h: 85 },
+      'BLD_COAL_MINE': { x: 1050, y: 580, w: 110, h: 85 },
+      'BLD_HUNTER_HUT': { x: 1350, y: 550, w: 100, h: 80 },
+      'BLD_COOKHOUSE': { x: 1550, y: 570, w: 100, h: 80 },
+      'BLD_CLINIC': { x: 1750, y: 590, w: 100, h: 80 },
+      'BLD_SHELTER': { x: 1300, y: 630, w: 100, h: 80 },
+      'BLD_WORKSHOP': { x: 1950, y: 570, w: 100, h: 80 },
+      'BLD_TRADING_POST': { x: 2100, y: 610, w: 100, h: 80 },
+    };
+    const types = Object.values(BuildingType);
+    for (const t of types) {
+      expect(positions[t]).toBeTruthy();
+    }
+    expect(Object.keys(positions).length).toBe(types.length);
+  });
+});
+
+describe('Camera 系统', () => {
+  it('centerOn 应该将相机居中到指定世界坐标', () => {
+    const cam = new Camera(2400, 1000, 375, 667);
+    cam.centerOn(1200, 500);
+    expect(cam.x).toBe(1200 - 375 / 2);
+    expect(cam.y).toBe(500 - 667 / 2);
   });
 
-  it('LAYOUT 常量应该与 game-renderer.js 导出一致', () => {
-    // 验证关键常量没有被意外修改
-    expect(LAYOUT.BTN_LEFT_PAD).toBe(10);
-    expect(LAYOUT.BTN_RIGHT_PAD).toBe(10);
-    expect(LAYOUT.BTN_GAP).toBe(5);
-    expect(LAYOUT.BTN_COUNT).toBe(4);
-    expect(LAYOUT.BTN_TOP_PAD).toBe(8);
-    expect(LAYOUT.BTN_H).toBe(35);
-    expect(LAYOUT.BOTTOM_BAR_H).toBe(55);
-    expect(LAYOUT.BUILDING_CARD_W).toBe(150);
-    expect(LAYOUT.BUILDING_CARD_H).toBe(100);
+  it('clamp 应该限制相机在世界范围内', () => {
+    const cam = new Camera(2400, 1000, 375, 667);
+    cam.x = -100;
+    cam.y = -50;
+    cam.clamp();
+    expect(cam.x).toBe(0);
+    expect(cam.y).toBe(0);
+
+    cam.x = 3000;
+    cam.y = 2000;
+    cam.clamp();
+    expect(cam.x).toBe(2400 - 375);
+    expect(cam.y).toBe(1000 - 667);
+  });
+
+  it('worldToScreen 应该正确转换坐标', () => {
+    const cam = new Camera(2400, 1000, 375, 667);
+    cam.x = 100;
+    cam.y = 50;
+    const s = cam.worldToScreen(200, 150);
+    expect(s.x).toBe(100);
+    expect(s.y).toBe(100);
+  });
+
+  it('screenToWorld 应该正确转换坐标', () => {
+    const cam = new Camera(2400, 1000, 375, 667);
+    cam.x = 100;
+    cam.y = 50;
+    const w = cam.screenToWorld(200, 150);
+    expect(w.x).toBe(300);
+    expect(w.y).toBe(200);
+  });
+
+  it('drag 应该移动相机', () => {
+    const cam = new Camera(2400, 1000, 375, 667);
+    cam.centerOn(1200, 500);
+    const startX = cam.x;
+    cam.startDrag(200, 300);
+    cam.drag(100, 200); // 向右下拖拽 → 相机向左上移动
+    expect(cam.x).toBe(startX - (100 - 200));
+  });
+
+  it('wasDragging 在小移动时应该返回 false', () => {
+    const cam = new Camera(2400, 1000, 375, 667);
+    cam.startDrag(200, 300);
+    cam.drag(202, 302); // 仅移动 2 像素
+    expect(cam.wasDragging()).toBe(false);
+  });
+
+  it('wasDragging 在大移动时应该返回 true', () => {
+    const cam = new Camera(2400, 1000, 375, 667);
+    cam.startDrag(200, 300);
+    cam.drag(210, 310); // 移动 10 像素
+    expect(cam.wasDragging()).toBe(true);
+  });
+
+  it('endDrag 应该结束拖拽状态', () => {
+    const cam = new Camera(2400, 1000, 375, 667);
+    cam.startDrag(200, 300);
+    cam.endDrag();
+    expect(cam.dragging).toBe(false);
   });
 });
 

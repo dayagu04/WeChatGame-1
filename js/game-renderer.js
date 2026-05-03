@@ -1,64 +1,54 @@
 // ==========================================
 // game-renderer.js
-// 动态 2D 场景渲染器：天空、山脉、建筑精灵、工人动画、天气粒子
+// LOL 风格全屏 2D 世界渲染器
+// 天空、远景山脉、地面、建筑精灵、工人动画、天气粒子、HUD
 // ==========================================
 
-import { ResourceType, BuildingState, WeatherType, WorkerState, EXPEDITION_CONFIGS, BuildingType } from './game-constants';
+import { ResourceType, BuildingState, WeatherType, WorkerState, BuildingType } from './game-constants';
 import { ParticleSystem } from './visual/particles';
-import { drawBuildingSprite, drawWorker, drawSky, drawMountains, drawGround, drawExpeditionBar } from './visual/sprites';
+import {
+  drawBuildingSprite, drawWorker, drawSky, drawExpeditionBar,
+  drawWorldGround, drawWorldTrees, drawWorldRocks, drawWorldBuilding,
+  drawWorldWorker, drawWorldMountains, drawWorldLockedBuilding,
+  BUILDING_WORLD_POSITIONS, getBuildingAnchor,
+} from './visual/sprites';
+import { Camera } from './visual/camera';
 
 const RES_EMOJI = {
-  [ResourceType.WOOD]: '🪵',
-  [ResourceType.COAL]: '⬛',
-  [ResourceType.MEAT]: '🥩',
-  [ResourceType.RATION]: '🍖',
-  [ResourceType.IRON]: '⚙️',
-  [ResourceType.GEM]: '💎',
+  [ResourceType.WOOD]: '🪵', [ResourceType.COAL]: '⬛',
+  [ResourceType.MEAT]: '🥩', [ResourceType.RATION]: '🍖',
+  [ResourceType.IRON]: '⚙️', [ResourceType.GEM]: '💎',
 };
 
 const WEATHER_EMOJI = {
-  [WeatherType.CLEAR]: '☀️',
-  [WeatherType.SNOW]: '🌨️',
-  [WeatherType.BLIZZARD]: '🌪️',
+  [WeatherType.CLEAR]: '☀️', [WeatherType.SNOW]: '🌨️', [WeatherType.BLIZZARD]: '🌪️',
 };
 
 const BLIZZARD_NAMES = {
-  'BLZ_IDLE': '平静',
-  'BLZ_WARNING': '预警中',
-  'BLZ_ACTIVE': '肆虐中',
-  'BLZ_RECOVERY': '消退中',
+  'BLZ_IDLE': '平静', 'BLZ_WARNING': '预警中',
+  'BLZ_ACTIVE': '肆虐中', 'BLZ_RECOVERY': '消退中',
 };
 
-const STATE_NAMES = {
-  [BuildingState.LOCKED]: '🔒 未解锁',
-  [BuildingState.NORMAL]: '✅ 空闲',
-  [BuildingState.UPGRADING]: '🔨 升级中',
-  [BuildingState.PRODUCING]: '⚙️ 生产中',
-  [BuildingState.HALTED_NO_WORKER]: '❌ 缺人',
-  [BuildingState.HALTED_NO_MATERIAL]: '❌ 缺料',
-  [BuildingState.FROZEN]: '🧊 冻结',
-};
-
-// 场景布局常量（导出供 game-main.js 共享）
-export const LAYOUT = {
-  RESOURCE_BAR_H: 60,
-  WEATHER_BAR_H: 28,
-  BOTTOM_BAR_H: 55,
-  BUILDING_COLS: 2,
-  BUILDING_CARD_W: 150,
-  BUILDING_CARD_H: 100,
-  BUILDING_GAP: 12,
-  GROUND_MARGIN: 30,
-  // 按钮布局
-  BTN_LEFT_PAD: 10,
-  BTN_RIGHT_PAD: 10,
-  BTN_GAP: 5,
+// HUD 布局常量
+export const HUD = {
+  RESOURCE_BAR_H: 56,
+  WEATHER_BAR_H: 26,
+  BOTTOM_BAR_H: 50,
+  BTN_LEFT_PAD: 8,
+  BTN_RIGHT_PAD: 8,
+  BTN_GAP: 4,
   BTN_COUNT: 4,
-  BTN_TOP_PAD: 8,
-  BTN_H: 35,
+  BTN_TOP_PAD: 6,
+  BTN_H: 34,
 };
 
-const SCENE_TOP_OFFSET = LAYOUT.RESOURCE_BAR_H + LAYOUT.WEATHER_BAR_H + 8;
+// 世界参数
+const WORLD_W = 2400;
+const WORLD_H = 1000;
+const HORIZON_RATIO = 0.35; // 地平线在屏幕高度的 35% 处
+
+// 工人行走速度（像素/帧，约 60fps）
+const WORKER_WALK_SPEED = 1.5;
 
 export class GameRenderer {
   constructor(ctx, width, height, safeTop) {
@@ -67,192 +57,161 @@ export class GameRenderer {
     this.h = height;
     this.safeTop = safeTop || 0;
     this.selectedBuilding = null;
-    this.scrollY = 0;
-    this.maxScrollY = 500; // 合理默认值，首帧渲染后更新
+    this.animTime = 0;
+
+    // 相机系统
+    this.camera = new Camera(WORLD_W, WORLD_H, width, height);
+    // 初始居中到火炉位置
+    const furnacePos = BUILDING_WORLD_POSITIONS[BuildingType.FURNACE];
+    if (furnacePos) {
+      this.camera.centerOn(furnacePos.x + furnacePos.w / 2, furnacePos.y + furnacePos.h / 2);
+    }
 
     // 粒子系统
     this.particles = new ParticleSystem(width, height);
 
-    // 工人位置缓存（用于动画平滑移动）
-    this.workerPositions = new Map();
-    this.animTime = 0;
+    // 工人视觉位置缓存 { workerId -> { x, y } }
+    this.workerVisualPos = new Map();
+
+    // 地平线 Y（屏幕空间）
+    this.horizonY = Math.floor(this.h * HORIZON_RATIO);
   }
 
   render(gameLoop) {
     const ctx = this.ctx;
     this.animTime = Date.now() / 1000;
+    const cam = this.camera;
 
     // 更新粒子
     this.particles.update(gameLoop.weather);
 
-    // 计算场景布局
-    const groundY = this.h * 0.42;
-    const sceneAreaTop = this.safeTop + SCENE_TOP_OFFSET;
-    const sceneAreaBottom = this.h - LAYOUT.BOTTOM_BAR_H;
-    const sceneH = sceneAreaBottom - sceneAreaTop;
-
-    ctx.clearRect(0, 0, this.w, this.h);
-
-    // === 1. 天空 ===
+    // 温度计算
     const temp = gameLoop.weather.getGlobalTemperature();
     const furnace = gameLoop.buildings.get(BuildingType.FURNACE);
     const furnaceLv = furnace.isUnlocked() ? furnace.level : 0;
     const warmth = furnaceLv > 0 && furnace.state !== BuildingState.FROZEN ? furnaceLv * 2 : 0;
     const effectiveTemp = temp + warmth;
 
+    ctx.clearRect(0, 0, this.w, this.h);
+
+    // === 1. 天空（全屏背景） ===
     drawSky(ctx, this.w, this.h, effectiveTemp, gameLoop.getTimeOfDay());
 
-    // === 2. 远山 ===
-    drawMountains(ctx, this.w, groundY);
+    // === 2. 远景山脉（视差滚动） ===
+    drawWorldMountains(ctx, cam.x, this.w, this.horizonY);
 
     // === 3. 地面 ===
-    drawGround(ctx, this.w, this.h, groundY);
+    drawWorldGround(ctx, cam.x, cam.y, this.w, this.h, WORLD_H, this.horizonY);
 
-    // === 4. 建筑精灵 + 工人（可滚动区域）===
+    // === 4. 装饰（树木、岩石） ===
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, sceneAreaTop, this.w, sceneH);
-    ctx.clip();
-
-    this.drawBuildingScene(gameLoop, groundY, sceneAreaTop);
-
+    drawWorldTrees(ctx, cam.x, cam.y, this.w, this.h);
+    drawWorldRocks(ctx, cam.x, cam.y, this.w, this.h);
     ctx.restore();
 
-    // === 5. 天气粒子覆盖 ===
+    // === 5. 建筑 ===
+    const buildings = gameLoop.buildings.getAll();
+    for (const b of buildings) {
+      const pos = BUILDING_WORLD_POSITIONS[b.type];
+      if (!pos) continue;
+
+      const screenPos = cam.worldToScreen(pos.x, pos.y);
+      // 视锥剔除
+      if (screenPos.x + pos.w < -20 || screenPos.x > this.w + 20) continue;
+      if (screenPos.y + pos.h < -20 || screenPos.y > this.h + 20) continue;
+
+      const isSelected = this.selectedBuilding === b.type;
+
+      if (b.isUnlocked()) {
+        drawWorldBuilding(ctx, b.type, screenPos.x, screenPos.y, pos.w, pos.h,
+          b.state, b.level, b.name, b.emoji, isSelected);
+      } else {
+        drawWorldLockedBuilding(ctx, screenPos.x, screenPos.y, pos.w, pos.h,
+          b.name, b.getUpgradeCost(), gameLoop.wallet.canAfford(b.getUpgradeCost()));
+      }
+    }
+
+    // === 6. 工人 ===
+    this.drawWorldWorkers(gameLoop, cam);
+
+    // === 7. 天气粒子 ===
     this.particles.draw(ctx, gameLoop.weather);
 
-    // === 6. 暴风雪屏幕遮罩 ===
+    // === 8. 暴风雪遮罩 ===
     if (gameLoop.weather.blizzardState === 'BLZ_ACTIVE') {
-      ctx.fillStyle = 'rgba(200,210,230,0.08)';
+      ctx.fillStyle = 'rgba(200,210,230,0.1)';
       ctx.fillRect(0, 0, this.w, this.h);
     }
 
-    // === 7. UI 层 ===
+    // === 9. HUD ===
     this.drawResourceBar(gameLoop);
     this.drawWeatherInfo(gameLoop, effectiveTemp, warmth);
     this.drawBottomBar(gameLoop);
+
+    // === 10. 小地图 ===
+    this.drawMinimap(gameLoop, cam);
   }
 
-  // ---- 建筑场景 ----
-  drawBuildingScene(gameLoop, groundY, sceneAreaTop) {
+  // ---- 工人世界渲染 ----
+  drawWorldWorkers(gameLoop, cam) {
     const ctx = this.ctx;
-    const buildings = gameLoop.buildings.getAll();
-    const { BUILDING_COLS: COLS, BUILDING_CARD_W: CW, BUILDING_CARD_H: CH, BUILDING_GAP: GAP, BOTTOM_BAR_H: BBH, GROUND_MARGIN: GM } = LAYOUT;
-    const totalRows = Math.ceil(buildings.length / COLS);
-    const gridW = COLS * CW + (COLS - 1) * GAP;
-    const startX = (this.w - gridW) / 2;
-    const startY = sceneAreaTop + 10 - this.scrollY;
+    const workers = gameLoop.workers.workers.filter(w => w.state !== WorkerState.DEAD);
 
-    // 更新最大滚动
-    const contentH = totalRows * (CH + GAP) + GM;
-    const sceneH = this.h - BBH - sceneAreaTop;
-    this.maxScrollY = Math.max(0, contentH - sceneH);
-
-    for (let i = 0; i < buildings.length; i++) {
-      const b = buildings[i];
-      const col = i % COLS;
-      const row = Math.floor(i / COLS);
-      const bx = startX + col * (CW + GAP);
-      const by = startY + row * (CH + GAP);
-
-      // 选中高亮
-      const isSelected = this.selectedBuilding === b.type;
-
-      // 建筑底座阴影
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.beginPath();
-      ctx.ellipse(bx + CW / 2, by + CH + 2, CW / 2 - 5, 4, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 建筑精灵
-      if (b.isUnlocked()) {
-        drawBuildingSprite(ctx, b.type, bx, by, CW, CH, b.state, b.level);
+    for (const w of workers) {
+      // 确定目标位置
+      let targetX, targetY;
+      if (w.state === WorkerState.EXPLORING) {
+        // 探索中的工人在地图边缘走动
+        const t = this.animTime;
+        targetX = 200 + Math.sin(t * 0.3 + w.workerId.charCodeAt(3)) * 100;
+        targetY = 500 + Math.cos(t * 0.2 + w.workerId.charCodeAt(3)) * 50;
+      } else if (w.assignedBuilding) {
+        const anchor = getBuildingAnchor(w.assignedBuilding);
+        // 多个工人在同一建筑时分散站位
+        const b = gameLoop.buildings.get(w.assignedBuilding);
+        const idx = b ? b.assignedWorkers.indexOf(w.workerId) : 0;
+        targetX = anchor.x + (idx - 1) * 20;
+        targetY = anchor.y;
       } else {
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
-        ctx.strokeRect(bx + 10, by + 10, CW - 20, CH - 20);
-        ctx.setLineDash([]);
-        ctx.fillStyle = '#666';
-        ctx.font = '11px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('🔒 ' + b.name, bx + CW / 2, by + CH / 2 - 4);
-        const cost = b.getUpgradeCost();
-        const costType = Object.keys(cost)[0];
-        const costVal = cost[costType];
-        ctx.fillStyle = gameLoop.wallet.canAfford(cost) ? '#4ecdc4' : '#ff6b6b';
-        ctx.font = '10px monospace';
-        ctx.fillText(`${costVal} ${costType.replace('RES_', '')}`, bx + CW / 2, by + CH / 2 + 12);
-        ctx.textAlign = 'left';
+        // 空闲工人在火炉附近闲逛
+        const furnaceAnchor = getBuildingAnchor(BuildingType.FURNACE);
+        const idleOffset = parseInt(w.workerId.replace('wk_', '')) || 0;
+        targetX = furnaceAnchor.x + 40 + (idleOffset % 5) * 25;
+        targetY = furnaceAnchor.y + 10 + Math.floor(idleOffset / 5) * 15;
       }
 
-      // 选中边框
-      if (isSelected) {
-        ctx.strokeStyle = '#6495ed';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(bx - 1, by - 1, CW + 2, CH + 2);
+      // 获取或初始化视觉位置
+      let vpos = this.workerVisualPos.get(w.workerId);
+      if (!vpos) {
+        vpos = { x: targetX, y: targetY };
+        this.workerVisualPos.set(w.workerId, vpos);
       }
 
-      // 建筑名称标签
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(bx + 24, by + CH - 18, CW - 28, 16);
-      ctx.fillStyle = '#fff';
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'center';
-      const stateText = STATE_NAMES[b.state] || '';
-      ctx.fillText(`${b.emoji} ${b.name} ${stateText}`, bx + CW / 2, by + CH - 6);
-      ctx.textAlign = 'left';
-
-      // 升级进度条
-      if (b.state === BuildingState.UPGRADING) {
-        const elapsed = Date.now() - b.upgradeStartTimeMs;
-        const pct = Math.min(1, elapsed / b.upgradeDurationMs);
-        drawExpeditionBar(ctx, bx + 8, by + CH + 4, CW - 16, pct, '升级中');
+      // 平滑移动到目标
+      const dx = targetX - vpos.x;
+      const dy = targetY - vpos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 1) {
+        const speed = Math.min(WORKER_WALK_SPEED, dist);
+        vpos.x += (dx / dist) * speed;
+        vpos.y += (dy / dist) * speed;
       }
 
-      // 分配工人数量指示
-      if (b.isUnlocked() && b.maxSlots > 0) {
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(bx + CW - 28, by + 2, 26, 14);
-        ctx.fillStyle = '#fff';
-        ctx.font = '9px monospace';
-        ctx.fillText(`👷${b.assignedWorkers.length}/${b.maxSlots}`, bx + CW - 26, by + 12);
-      }
+      // 转换到屏幕坐标
+      const screenPos = cam.worldToScreen(vpos.x, vpos.y);
+      // 视锥剔除
+      if (screenPos.x < -30 || screenPos.x > this.w + 30) continue;
+      if (screenPos.y < -30 || screenPos.y > this.h + 30) continue;
 
-      this.drawAssignedWorkers(gameLoop, b, bx, by);
+      drawWorldWorker(ctx, w, screenPos.x, screenPos.y, targetX, targetY);
     }
   }
 
-  // ---- 在建筑旁绘制工人角色 ----
-  drawAssignedWorkers(gameLoop, building, bx, by) {
-    if (!building.isUnlocked()) return;
-    const ctx = this.ctx;
-
-    const workers = gameLoop.workers.workers.filter(
-      w => w.assignedBuilding === building.type && w.state !== WorkerState.DEAD
-    );
-
-    for (let i = 0; i < workers.length; i++) {
-      const w = workers[i];
-      const wx = bx + 20 + i * 22;
-      const wy = by + LAYOUT.BUILDING_CARD_H - 4;
-      drawWorker(ctx, w, wx, wy, 0.8);
-
-      // 健康状态条
-      if (w.health < 50) {
-        const barW = 16;
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.fillRect(wx - barW / 2, wy - 12, barW, 3);
-        ctx.fillStyle = w.health < 25 ? '#ff4444' : '#ffaa00';
-        ctx.fillRect(wx - barW / 2, wy - 12, barW * (w.health / 100), 3);
-      }
-    }
-  }
-
-  // ---- 顶部资源栏 ----
+  // ---- HUD: 资源栏 ----
   drawResourceBar(gameLoop) {
     const ctx = this.ctx;
     const y = this.safeTop + 4;
+    const H = HUD.RESOURCE_BAR_H;
     const resources = [
       { type: ResourceType.WOOD, label: '木' },
       { type: ResourceType.COAL, label: '煤' },
@@ -262,8 +221,8 @@ export class GameRenderer {
       { type: ResourceType.GEM, label: '钻' },
     ];
 
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    roundRect(ctx, 4, y, this.w - 8, LAYOUT.RESOURCE_BAR_H - 4, 6);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    roundRect(ctx, 4, y, this.w - 8, H - 4, 6);
     ctx.fill();
 
     ctx.font = '11px monospace';
@@ -274,30 +233,28 @@ export class GameRenderer {
       const col = i % 3;
       const row = Math.floor(i / 3);
       const x = 8 + col * colW;
-      const ry = y + 14 + row * 22;
+      const ry = y + 14 + row * 20;
       const val = Math.floor(gameLoop.wallet.get(r.type));
       const cap = gameLoop.wallet.getStorageCap(r.type);
       const pct = Math.min(100, Math.floor(val / cap * 100));
 
-      // 进度条背景
       ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.fillRect(x, ry + 3, colW - 8, 8);
+      ctx.fillRect(x, ry + 3, colW - 8, 7);
       ctx.fillStyle = pct >= 90 ? 'rgba(255,100,100,0.4)' : 'rgba(100,200,180,0.3)';
-      ctx.fillRect(x, ry + 3, (colW - 8) * pct / 100, 8);
+      ctx.fillRect(x, ry + 3, (colW - 8) * pct / 100, 7);
 
       ctx.fillStyle = pct >= 90 ? '#ff6b6b' : '#e0e0e0';
       ctx.fillText(`${RES_EMOJI[r.type]}${r.label}:${val}/${cap}`, x, ry);
     }
   }
 
-  // ---- 天气信息 ----
+  // ---- HUD: 天气信息 ----
   drawWeatherInfo(gameLoop, effectiveTemp, warmth) {
     const ctx = this.ctx;
-    const y = this.safeTop + LAYOUT.RESOURCE_BAR_H;
+    const y = this.safeTop + HUD.RESOURCE_BAR_H;
     const w = gameLoop.weather;
     const emoji = WEATHER_EMOJI[w.currentWeather] || '☀️';
 
-    // 日夜时间
     const tod = gameLoop.getTimeOfDay();
     const hour = Math.floor(tod * 24);
     const timeStr = `${String(hour).padStart(2, '0')}:00`;
@@ -305,8 +262,8 @@ export class GameRenderer {
     const eff = gameLoop.getWorkerEfficiency();
     const effStr = eff < 1 ? ` 效率${Math.floor(eff * 100)}%` : '';
 
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    roundRect(ctx, 4, y, this.w - 8, LAYOUT.WEATHER_BAR_H, 4);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    roundRect(ctx, 4, y, this.w - 8, HUD.WEATHER_BAR_H, 4);
     ctx.fill();
 
     ctx.font = 'bold 12px monospace';
@@ -316,15 +273,17 @@ export class GameRenderer {
     ctx.fillText(`${emoji}${effectiveTemp.toFixed(1)}°C${warmthStr} ${timeEmoji}${timeStr}${effStr} 暴风雪:${blizName}`, 10, y + 18);
   }
 
-  // ---- 底部操作栏 ----
+  // ---- HUD: 底部操作栏 ----
   drawBottomBar(gameLoop) {
     const ctx = this.ctx;
-    const { BOTTOM_BAR_H: BBH, BTN_LEFT_PAD: BLP, BTN_RIGHT_PAD: BRP, BTN_GAP: BG,
-            BTN_COUNT: BC, BTN_TOP_PAD: BTP, BTN_H: BH } = LAYOUT;
-    const y = this.h - BBH;
+    const H = HUD.BOTTOM_BAR_H;
+    const y = this.h - H;
+    const BLP = HUD.BTN_LEFT_PAD, BRP = HUD.BTN_RIGHT_PAD;
+    const BG = HUD.BTN_GAP, BC = HUD.BTN_COUNT;
+    const BTP = HUD.BTN_TOP_PAD, BH = HUD.BTN_H;
 
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillRect(0, y, this.w, BBH);
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, y, this.w, H);
 
     const furnace = gameLoop.buildings.get(BuildingType.FURNACE);
     const btn3Label = furnace && furnace.state === BuildingState.FROZEN
@@ -334,11 +293,8 @@ export class GameRenderer {
     let btn2Label = '🧭 探索';
     if (this.selectedBuilding) {
       const sel = gameLoop.buildings.get(this.selectedBuilding);
-      if (sel && !sel.isUnlocked()) {
-        btn2Label = '🏗️ 建造';
-      } else if (sel && sel.isUnlocked()) {
-        btn2Label = '👷 分配';
-      }
+      if (sel && !sel.isUnlocked()) btn2Label = '🏗️ 建造';
+      else if (sel && sel.isUnlocked()) btn2Label = '👷 分配';
     }
 
     const buttons = [
@@ -367,6 +323,42 @@ export class GameRenderer {
       ctx.fillText(buttons[i].label, bx + btnW / 2, y + BTP + BH / 2 + 4);
     }
     ctx.restore();
+  }
+
+  // ---- 小地图 ----
+  drawMinimap(gameLoop, cam) {
+    const ctx = this.ctx;
+    const mmW = 80, mmH = 40;
+    const mmX = this.w - mmW - 8;
+    const mmY = this.safeTop + HUD.RESOURCE_BAR_H + HUD.WEATHER_BAR_H + 4;
+
+    // 小地图背景
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(mmX, mmY, mmW, mmH);
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mmX, mmY, mmW, mmH);
+
+    // 建筑点
+    const buildings = gameLoop.buildings.getAll();
+    for (const b of buildings) {
+      if (!b.isUnlocked()) continue;
+      const pos = BUILDING_WORLD_POSITIONS[b.type];
+      if (!pos) continue;
+      const dotX = mmX + (pos.x / WORLD_W) * mmW;
+      const dotY = mmY + (pos.y / WORLD_H) * mmH;
+      ctx.fillStyle = b.type === BuildingType.FURNACE ? '#ff6644' : '#4ecdc4';
+      ctx.fillRect(dotX - 1, dotY - 1, 3, 3);
+    }
+
+    // 相机视野框
+    const vpX = mmX + (cam.x / WORLD_W) * mmW;
+    const vpY = mmY + (cam.y / WORLD_H) * mmH;
+    const vpW = (cam.screenW / WORLD_W) * mmW;
+    const vpH = (cam.screenH / WORLD_H) * mmH;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(vpX, vpY, vpW, vpH);
   }
 }
 

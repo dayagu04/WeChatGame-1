@@ -1,14 +1,15 @@
 // ==========================================
 // game-main.js
-// 游戏主控：初始化 + 渲染循环 + 输入处理
+// 游戏主控：初始化 + 渲染循环 + 输入处理（相机感知）
 // ==========================================
 
 import './render';
 import { SAFE_TOP } from './render';
 import { BuildingType, BuildingState, ResourceType, WorkerState, EXPEDITION_CONFIGS, eventBus, GlobalEvents } from './game-constants';
 import { GameLoop } from './game-loop';
-import { GameRenderer, LAYOUT } from './game-renderer';
+import { GameRenderer, HUD } from './game-renderer';
 import { PersistenceManager } from './game-persistence';
+import { BUILDING_WORLD_POSITIONS } from './visual/sprites';
 
 export default class GameMain {
   constructor() {
@@ -24,8 +25,10 @@ export default class GameMain {
     // 探索选择索引
     this.expeditionIndex = 0;
 
-    // 触摸输入
+    // 触摸输入状态
+    this.touchStartX = 0;
     this.touchStartY = 0;
+    this.touchStartTime = 0;
     this.setupInput();
     this.setupLogging();
 
@@ -44,23 +47,35 @@ export default class GameMain {
   }
 
   setupInput() {
+    const cam = this.renderer.camera;
+
     wx.onTouchStart((e) => {
       const touch = e.touches[0];
+      this.touchStartX = touch.clientX;
       this.touchStartY = touch.clientY;
-      this.handleTap(touch.clientX, touch.clientY);
+      this.touchStartTime = Date.now();
+      cam.startDrag(touch.clientX, touch.clientY);
     });
 
     wx.onTouchMove((e) => {
       const touch = e.touches[0];
-      const dy = touch.clientY - this.touchStartY;
-      const maxScroll = this.renderer.maxScrollY || 500;
-      this.renderer.scrollY = Math.max(0, Math.min(maxScroll, this.renderer.scrollY - dy));
-      this.touchStartY = touch.clientY;
+      cam.drag(touch.clientX, touch.clientY);
+    });
+
+    wx.onTouchEnd((e) => {
+      const touch = e.changedTouches[0];
+      const dt = Date.now() - this.touchStartTime;
+      const camWasDragging = cam.wasDragging();
+      cam.endDrag();
+
+      // 短按且没有拖拽 = 点击
+      if (dt < 300 && !camWasDragging) {
+        this.handleTap(touch.clientX, touch.clientY);
+      }
     });
   }
 
   setupLogging() {
-    // 监听关键事件并输出日志
     eventBus.on(GlobalEvents.BUILDING_STATE_CHANGE, (data) => {
       console.log(`[Event] Building state change: ${data.buildingId} -> ${data.newState}`);
     });
@@ -81,11 +96,10 @@ export default class GameMain {
   handleTap(x, y) {
     const game = this.game;
     const r = this.renderer;
-    const safeTop = r.safeTop;
-    const L = LAYOUT;
-    const SCENE_TOP_OFFSET = L.RESOURCE_BAR_H + L.WEATHER_BAR_H + 8;
+    const cam = r.camera;
+    const L = HUD;
 
-    // 检查底部按钮点击（优先级更高）
+    // 1. 检查底部按钮点击（屏幕空间，优先级最高）
     const btnY = this.h - L.BOTTOM_BAR_H;
     const btnW = (this.w - L.BTN_LEFT_PAD - L.BTN_RIGHT_PAD - (L.BTN_COUNT - 1) * L.BTN_GAP) / L.BTN_COUNT;
 
@@ -99,28 +113,26 @@ export default class GameMain {
       }
     }
 
-    // 检查建筑卡片点击
-    const { BUILDING_COLS: COLS, BUILDING_CARD_W: CW, BUILDING_CARD_H: CH, BUILDING_GAP: GAP } = L;
-    const sceneAreaTop = safeTop + SCENE_TOP_OFFSET;
-    const gridW = COLS * CW + (COLS - 1) * GAP;
-    const startX = (this.w - gridW) / 2;
-    const startY = sceneAreaTop + 10 - r.scrollY;
+    // 2. 检查顶部资源栏点击（忽略）
+    if (y < r.safeTop + HUD.RESOURCE_BAR_H + HUD.WEATHER_BAR_H) return;
+
+    // 3. 检查建筑点击（世界空间）
+    const worldPos = cam.screenToWorld(x, y);
     const buildings = game.buildings.getAll();
 
-    for (let i = 0; i < buildings.length; i++) {
-      const b = buildings[i];
-      const col = i % COLS;
-      const row = Math.floor(i / COLS);
-      const bx = startX + col * (CW + GAP);
-      const by = startY + row * (CH + GAP);
+    for (const b of buildings) {
+      const pos = BUILDING_WORLD_POSITIONS[b.type];
+      if (!pos) continue;
 
-      if (x >= bx && x <= bx + CW && y >= by && y <= by + CH) {
+      if (worldPos.x >= pos.x && worldPos.x <= pos.x + pos.w &&
+          worldPos.y >= pos.y && worldPos.y <= pos.y + pos.h) {
         r.selectedBuilding = b.type;
         console.log(`[Tap] Building "${b.name}" selected (state=${b.state}, lv=${b.level})`);
         return;
       }
     }
 
+    // 点击空白处取消选择
     r.selectedBuilding = null;
   }
 
@@ -137,14 +149,11 @@ export default class GameMain {
         this.doAssign(selected);
         break;
 
-      case 2: // 智能操作：有选中建筑→建造/升级，无选中→探索
+      case 2: // 智能操作
         if (selected) {
           const b = game.buildings.get(selected);
-          if (!b.isUnlocked()) {
-            this.doUpgrade(selected);
-          } else {
-            this.doAssign(selected);
-          }
+          if (!b.isUnlocked()) this.doUpgrade(selected);
+          else this.doAssign(selected);
         } else {
           this.doExplore();
         }
