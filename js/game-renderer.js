@@ -586,6 +586,14 @@ export class GameRenderer {
 
       ctx.fillStyle = pct >= 90 ? '#ff6b6b' : '#e0e0e0';
       ctx.fillText(`${RES_EMOJI[r.type]}${r.label}:${val}/${cap}`, x, ry);
+
+      // 容量警告图标
+      if (pct >= 90) {
+        ctx.fillStyle = '#ff6b6b';
+        ctx.font = '8px sans-serif';
+        ctx.fillText('⚠', x + colW - 16, ry);
+        ctx.font = '11px monospace';
+      }
     }
   }
 
