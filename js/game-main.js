@@ -54,23 +54,23 @@ export default class GameMain {
       this.touchStartX = touch.clientX;
       this.touchStartY = touch.clientY;
       this.touchStartTime = Date.now();
+      this.touchMoved = false;
       cam.startDrag(touch.clientX, touch.clientY);
     });
 
     wx.onTouchMove((e) => {
       const touch = e.touches[0];
+      const dx = touch.clientX - this.touchStartX;
+      const dy = touch.clientY - this.touchStartY;
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) this.touchMoved = true;
       cam.drag(touch.clientX, touch.clientY);
     });
 
     wx.onTouchEnd((e) => {
-      const touch = e.changedTouches[0];
-      const dt = Date.now() - this.touchStartTime;
-      const camWasDragging = cam.wasDragging();
       cam.endDrag();
-
-      // 短按且没有拖拽 = 点击
-      if (dt < 300 && !camWasDragging) {
-        this.handleTap(touch.clientX, touch.clientY);
+      // 没有拖拽 = 点击
+      if (!this.touchMoved) {
+        this.handleTap(this.touchStartX, this.touchStartY);
       }
     });
   }
@@ -250,57 +250,70 @@ export default class GameMain {
 
   doUpgrade(selected) {
     const game = this.game;
+    const r = this.renderer;
     if (!selected) {
-      console.log('[Action:Upgrade] No building selected');
+      r.addNotification('请先选择一个建筑', 'warning');
       return;
     }
     const b = game.buildings.get(selected);
     if (!b.isUnlocked()) {
       const cost = b.getUpgradeCost();
-      console.log(`[Action:Build] ${b.name} cost=${JSON.stringify(cost)}, wallet wood=${Math.floor(game.wallet.get(ResourceType.WOOD))}`);
+      const costType = Object.keys(cost)[0];
+      const costVal = cost[costType];
+      const have = game.wallet.get(costType);
+      console.log(`[Action:Build] ${b.name} cost=${costVal} ${costType}, have=${Math.floor(have)}`);
       if (game.wallet.consume(cost)) {
         b.level = 1;
         b.state = BuildingState.NORMAL;
         console.log(`[Action:Build] SUCCESS: ${b.name} built!`);
+        r.addNotification(`建造成功：${b.name}！`, 'success');
       } else {
-        console.log(`[Action:Build] FAILED: not enough resources`);
+        console.log(`[Action:Build] FAILED: need ${costVal} ${costType}, have ${Math.floor(have)}`);
+        r.addNotification(`资源不足！需要 ${costVal} ${costType.replace('RES_', '')}（当前 ${Math.floor(have)}）`, 'danger');
       }
     } else if (b.state === BuildingState.NORMAL || b.state === BuildingState.PRODUCING) {
       const cost = b.getUpgradeCost();
-      console.log(`[Action:Upgrade] ${b.name} Lv.${b.level} cost=${JSON.stringify(cost)}`);
+      const costType = Object.keys(cost)[0];
+      const costVal = cost[costType];
+      const have = game.wallet.get(costType);
+      console.log(`[Action:Upgrade] ${b.name} Lv.${b.level} cost=${costVal} ${costType}`);
       if (game.wallet.consume(cost)) {
         b.startUpgrade(Date.now());
         console.log(`[Action:Upgrade] SUCCESS: ${b.name} upgrading to Lv.${b.level + 1}`);
+        r.addNotification(`${b.name} 开始升级！`, 'info');
       } else {
-        console.log(`[Action:Upgrade] FAILED: not enough resources`);
+        console.log(`[Action:Upgrade] FAILED: need ${costVal} ${costType}, have ${Math.floor(have)}`);
+        r.addNotification(`资源不足！需要 ${costVal} ${costType.replace('RES_', '')}（当前 ${Math.floor(have)}）`, 'danger');
       }
     } else {
       console.log(`[Action:Upgrade] ${b.name} state=${b.state}, cannot upgrade`);
+      r.addNotification(`${b.name} 当前无法升级`, 'warning');
     }
   }
 
   doAssign(selected) {
     const game = this.game;
+    const r = this.renderer;
     if (!selected) {
-      console.log('[Action:Assign] No building selected');
+      r.addNotification('请先选择一个建筑', 'warning');
       return;
     }
     const b = game.buildings.get(selected);
     if (!b.isUnlocked()) {
-      console.log(`[Action:Assign] ${b.name} is locked (level=${b.level})`);
+      r.addNotification(`${b.name} 尚未建造`, 'warning');
       return;
     }
     if (b.maxSlots <= 0) {
-      console.log(`[Action:Assign] ${b.name} has no worker slots`);
+      r.addNotification(`${b.name} 没有工人槽位`, 'warning');
       return;
     }
     const idle = game.workers.workers.find(w => w.state === WorkerState.IDLE);
     if (!idle) {
-      console.log(`[Action:Assign] No idle workers (total=${game.workers.workers.length}, alive=${game.workers.getAlive().length})`);
+      r.addNotification('没有空闲工人可分配', 'warning');
       return;
     }
     if (b.assignedWorkers.length >= b.maxSlots) {
-      console.log(`[Action:Assign] ${b.name} is full (${b.assignedWorkers.length}/${b.maxSlots})`);
+      r.addNotification(`${b.name} 已满员 (${b.assignedWorkers.length}/${b.maxSlots})`, 'warning');
       return;
     }
     idle.state = WorkerState.WORKING;
@@ -308,6 +321,7 @@ export default class GameMain {
     b.assignedWorkers.push(idle.workerId);
     if (b.state === BuildingState.NORMAL) b.state = BuildingState.PRODUCING;
     console.log(`[Action:Assign] SUCCESS: ${idle.name} -> ${b.name} (${b.assignedWorkers.length}/${b.maxSlots})`);
+    r.addNotification(`${idle.name} 已分配到 ${b.name}`, 'success');
   }
 
   doUnassign(selected) {
